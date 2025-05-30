@@ -1,0 +1,685 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This URDF was automatically created by SolidWorks to URDF Exporter! Originally created by Stephen Brawner (brawner@gmail.com) 
+     Commit Version: 1.6.0-4-g7f85cfe  Build Version: 1.6.7995.38578
+     For more information, please see http://wiki.ros.org/sw_urdf_exporter -->
+<robot
+  name="leg00">
+  <link
+    name="base">
+    <inertial>
+      <origin
+        xyz="2.394E-05 0 0.10736"
+        rpy="0 0 0" />
+      <mass
+        value="17.42" />
+      <inertia
+        ixx="0.41416"
+        ixy="2.9E-07"
+        ixz="3.165E-05"
+        iyy="0.2014"
+        iyz="2E-08"
+        izz="0.3867" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/base.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.02745 0.05098 0.05098 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0.125"
+        rpy="0 0 0" />
+          <geometry>
+              <box size="0.2 0.38 0.25"/>
+          </geometry>
+    </collision>
+  </link>
+  <link
+    name="L_hip">
+    <inertial>
+      <origin
+        xyz="-0.075623 0 -0.059114"
+        rpy="0 0 0" />
+      <mass
+        value="1.4936" />
+      <inertia
+        ixx="0.0044504"
+        ixy="-2E-08"
+        ixz="-0.0014576"
+        iyy="0.0048828"
+        iyz="1.5E-07"
+        izz="0.0030898" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/L_hip.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.79216 0.81961 0.93333 1" />
+      </material>
+    </visual>
+    <!-- <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+
+    </collision> -->
+  </link>
+  <joint
+    name="L_hip_joint"
+    type="revolute">
+    <origin
+      xyz="0 0.1175 -0.0237"
+      rpy="0 0 0" />
+    <parent
+      link="base" />
+    <child
+      link="L_hip" />
+    <axis
+      xyz="0 0 1" />
+    <limit                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            
+      lower="-1.5"
+      upper="1.5"
+      effort="300"
+      velocity="50" />
+      <dynamics damping="0.0" friction="0.0"/>
+  </joint>
+  <link
+    name="L_hip2">
+    <inertial>
+      <origin
+        xyz="0.065812 -0.057927 -0.015122"
+        rpy="0 0 0" />
+      <mass
+        value="1.3333" />
+      <inertia
+        ixx="0.0021859"
+        ixy="0.00063143"
+        ixz="0.00025969"
+        iyy="0.0033125"
+        iyz="-0.0001735"
+        izz="0.0029107" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/L_hip2.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.79216 0.81961 0.93333 1" />
+      </material>
+    </visual>
+    <!-- <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/L_hip2.STL" />
+      </geometry>
+    </collision> -->
+  </link>
+  <joint
+    name="L_hip2_joint"
+    type="revolute">
+    <origin
+      xyz="-0.0733 0 -0.084"
+      rpy="0 0 0" />
+    <parent
+      link="L_hip" />
+    <child
+      link="L_hip2" />
+    <axis
+      xyz="1 0 0" />
+    <limit
+      lower="-0.5"
+      upper="1"
+      effort="300"
+      velocity="50" />
+      <dynamics damping="0.0" friction="0.0"/>
+  </joint>
+  <link
+    name="L_thigh">
+    <inertial>
+      <origin
+        xyz="-6.1035E-06 0.019951 -0.10547"
+        rpy="0 0 0" />
+      <mass
+        value="4.91" />
+      <inertia
+        ixx="0.091299"
+        ixy="-1.5E-07"
+        ixz="2.16E-06"
+        iyy="0.09171"
+        iyz="-0.0029195"
+        izz="0.01036" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/L_thigh.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.79216 0.81961 0.93333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0.0141 -0.175"
+        rpy="0 0 0" />
+      <geometry>                                  
+          <cylinder radius="0.04" length="0.30"/>
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="L_thigh_joint"
+    type="revolute">
+    <origin
+      xyz="0.078 -0.014084 -0.0185"
+      rpy="0 0 0" />
+    <parent
+      link="L_hip2" />
+    <child
+      link="L_thigh" />
+    <axis
+      xyz="0 1 0" />
+    <limit
+      lower="-1.7"
+      upper="0"
+      effort="300"
+      velocity="50" />
+      <dynamics damping="0.0" friction="0.0"/>
+  </joint>
+  <link
+    name="L_calf">
+    <inertial>
+      <origin
+        xyz="4.0277E-05 0.016633 -0.14247"
+        rpy="0 0 0" />
+      <mass
+        value="1.557" />
+      <inertia
+        ixx="0.015459"
+        ixy="-0.000003"
+        ixz="-0.000004"
+        iyy="0.015806"
+        iyz="-0.000121"
+        izz="0.001066" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/L_calf.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.79216 0.81961 0.93333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0.0141 -0.175"
+        rpy="0 0 0" />
+      <geometry>                                  
+          <cylinder radius="0.04" length="0.27"/>
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="L_calf_joint"
+    type="revolute">
+    <origin
+      xyz="0 0 -0.35"
+      rpy="0 0 0" />
+    <parent
+      link="L_thigh" />
+    <child
+      link="L_calf" />
+    <axis
+      xyz="0 1 0" />
+    <limit
+      lower="0"
+      upper="2"
+      effort="300"
+      velocity="50" />
+      <dynamics damping="0.0" friction="0.0"/>
+  </joint>
+  <link
+    name="L_toe">
+    <inertial>
+      <origin
+        xyz="-0.0057329 0.015479 -0.044423"
+        rpy="0 0 0" />
+      <mass
+        value="0.5" />
+      <inertia
+        ixx="0.00024557"
+        ixy="-5E-07"
+        ixz="0.00014186"
+        iyy="0.0013105"
+        iyz="2E-07"
+        izz="0.0012091" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/L_toe.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.89804 0.91765 0.92941 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/L_toe.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="L_toe_joint"
+    type="revolute">
+    <origin
+      xyz="0 0 -0.35"
+      rpy="0 0 0" />
+    <parent
+      link="L_calf" />
+    <child
+      link="L_toe" />
+    <axis
+      xyz="0 1 0" />
+    <limit
+      lower="-0.8"
+      upper="0.8"
+      effort="100"
+      velocity="50" />
+      <dynamics damping="0.0" friction="0.0"/>
+  </joint>
+  <link name="L_end_effector">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0001" />
+      </geometry>
+      <material name=""> 
+        <color rgba="0 0 0 0" />
+      </material>
+    </visual>
+  </link>
+  <joint name="L_end_joint"
+    type="fixed">
+    <origin
+      xyz="0 0 -0.072"
+      rpy="0 0 0" />
+    <parent
+      link="L_toe" />
+    <child
+      link="L_end_effector" />
+    <axis
+      xyz="0 0 0" />
+    <limit
+      lower="0"
+      upper="0"
+      effort="0"
+      velocity="0" />
+  </joint>
+  <link
+    name="R_hip">
+    <inertial>
+      <origin
+        xyz="-0.075623 0 -0.059114"
+        rpy="0 0 0" />
+      <mass
+        value="1.4936" />
+      <inertia
+        ixx="0.0044504"
+        ixy="-2E-08"
+        ixz="-0.0014576"
+        iyy="0.0048828"
+        iyz="1.5E-07"
+        izz="0.0030898" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/R_hip.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.79216 0.81961 0.93333 1" />
+      </material>
+    </visual>
+    <!-- <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/R_hip.STL" />
+      </geometry>
+    </collision> -->
+  </link>
+  <joint
+    name="R_hip_joint"
+    type="revolute">
+    <origin
+      xyz="0 -0.1175 -0.0237"
+      rpy="0 0 0" />
+    <parent
+      link="base" />
+    <child
+      link="R_hip" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="-1.5"
+      upper="1.5"
+      effort="300"
+      velocity="50" />
+      <dynamics damping="0.0" friction="0.0"/>
+  </joint>
+  <link
+    name="R_hip2">
+    <inertial>
+      <origin
+        xyz="0.065812 0.057927 -0.015122"
+        rpy="0 0 0" />
+      <mass
+        value="1.3333" />
+      <inertia
+        ixx="0.0021859"
+        ixy="-0.0006314"
+        ixz="0.00026006"
+        iyy="0.0033125"
+        iyz="0.0001735"
+        izz="0.0029107" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/R_hip2.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.79216 0.81961 0.93333 1" />
+      </material>
+    </visual>
+    <!-- <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/R_hip2.STL" />
+      </geometry>
+    </collision> -->
+  </link>
+  <joint
+    name="R_hip2_joint"
+    type="revolute">
+    <origin
+      xyz="-0.0733 0 -0.084"
+      rpy="0 0 0" />
+    <parent
+      link="R_hip" />
+    <child
+      link="R_hip2" />
+    <axis
+      xyz="1 0 0" />
+    <limit
+      lower="-1"
+      upper="0.5"
+      effort="300"
+      velocity="50" />
+      <dynamics damping="0.0" friction="0.0"/>
+  </joint>
+  <link
+    name="R_thigh">
+    <inertial>
+      <origin
+        xyz="6.1035E-06 -0.019951 -0.10547"
+        rpy="0 0 0" />
+      <mass
+        value="4.91" />
+      <inertia
+        ixx="0.091299"
+        ixy="-1.5E-07"
+        ixz="-2.16E-06"
+        iyy="0.09171"
+        iyz="0.0029195"
+        izz="0.01036" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/R_thigh.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.79216 0.81961 0.93333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 -0.0141 -0.175"
+        rpy="0 0 0" />
+      <geometry>                                  
+          <cylinder radius="0.04" length="0.30"/>
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="R_thigh_joint"
+    type="revolute">
+    <origin
+      xyz="0.078 0.014084 -0.0185"
+      rpy="0 0 0" />
+    <parent
+      link="R_hip2" />
+    <child
+      link="R_thigh" />
+    <axis
+      xyz="0 1 0" />
+    <limit
+      lower="-1.7"
+      upper="0"
+      effort="300"
+      velocity="50" />
+      <dynamics damping="0.0" friction="0.0"/>
+  </joint>
+  <link
+    name="R_calf">
+    <inertial>
+      <origin
+        xyz="-4.0277E-05 -0.016633 -0.14247"
+        rpy="0 0 0" />
+      <mass
+        value="1.557" />
+      <inertia
+        ixx="0.015459"
+        ixy="-0.000003"
+        ixz="0.000004"
+        iyy="0.015806"
+        iyz="0.000121"
+        izz="0.001066" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/R_calf.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.79216 0.81961 0.93333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 -0.0141 -0.175"
+        rpy="0 0 0" />
+      <geometry>                                  
+          <cylinder radius="0.04" length="0.30"/>
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="R_calf_joint"
+    type="revolute">
+    <origin
+      xyz="0 0 -0.35"
+      rpy="0 0 0" />
+    <parent
+      link="R_thigh" />
+    <child
+      link="R_calf" />
+    <axis
+      xyz="0 1 0" />
+    <limit
+      lower="0"
+      upper="2"
+      effort="300"
+      velocity="50" />
+      <dynamics damping="0.0" friction="0.0"/>
+  </joint>
+  <link
+    name="R_toe">
+    <inertial>
+      <origin
+        xyz="-0.0057329 -0.015521 -0.044423"
+        rpy="0 0 0" />
+      <mass
+        value="0.5" />
+      <inertia
+        ixx="0.00024557"
+        ixy="-5E-07"
+        ixz="0.00014186"
+        iyy="0.0013105"
+        iyz="2E-07"
+        izz="0.0012091" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/R_toe.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.89804 0.91765 0.92941 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/R_toe.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="R_toe_joint"
+    type="revolute">
+    <origin
+      xyz="0 0 -0.35"
+      rpy="0 0 0" />
+    <parent
+      link="R_calf" />
+    <child
+      link="R_toe" />
+    <axis
+      xyz="0 1 0" />
+    <limit
+      lower="-0.8"
+      upper="0.8"
+      effort="100"
+      velocity="50" />
+      <dynamics damping="0.0" friction="0.0"/>
+  </joint>
+  <link name="R_end_effector">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0001" />
+      </geometry>
+      <material name=""> 
+        <color rgba="0 0 0 0" />
+      </material>
+    </visual>
+  </link>
+  <joint name="R_end_joint"
+    type="fixed">
+    <origin
+      xyz="0 0 -0.072"
+      rpy="0 0 0" />
+    <parent
+      link="R_toe" />
+    <child
+      link="R_end_effector" />
+    <axis
+      xyz="0 0 0" />
+    <limit
+      lower="0"
+      upper="0"
+      effort="0"
+      velocity="0" />
+  </joint>
+</robot>
