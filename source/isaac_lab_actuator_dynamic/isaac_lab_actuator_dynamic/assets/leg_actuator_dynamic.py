@@ -4,7 +4,7 @@ from isaaclab.actuators import ActuatorNetMLPCfg, DCMotorCfg, ImplicitActuatorCf
 from isaaclab.assets.articulation import ArticulationCfg
 from isaac_lab_actuator_dynamic.assets import LOCAL_ASSETS_DATA_DIR
 
-LEGACTUATORDYNAMIC_USD_PATH = f"{LOCAL_ASSETS_DATA_DIR}/Robots/Aidin/aidin_quadruped/aidin_quadruped.usd"
+LEGACTUATORDYNAMIC_USD_PATH = f"{LOCAL_ASSETS_DATA_DIR}/Robots/Aidin/leg05/hr.usd"
 
 LEGACTUATORDYNAMIC_CFG = ArticulationCfg(
     spawn=sim_utils.UsdFileCfg(
@@ -26,27 +26,52 @@ LEGACTUATORDYNAMIC_CFG = ArticulationCfg(
     init_state=ArticulationCfg.InitialStateCfg(
         pos=(0.0, 0.0, 0.93),
         joint_pos={
-            'LFJ_scap': 0.0, # limit -35, 35 (degrees)
-            'LFJ_hip': 0.0, # limit -180, 180 (degrees)
-            'LFJ_knee': 0.0, # limit 0, 180 (degrees)
+            'L_hip2_joint': 0.0, # limit -35, 35 (degrees)
         },
         joint_vel={".*": 0.0},
     ),
     soft_joint_pos_limit_factor=0.97,
     actuators={
-        "legs": ImplicitActuatorCfg(
-            joint_names_expr=["LFJ_scap", "LFJ_hip", "LFJ_knee"],
+        "interested_joint": ImplicitActuatorCfg(
+            joint_names_expr=["L_hip2_joint"],
             effort_limit=300.0,
             velocity_limit=100.0,
             stiffness={
-                "LFJ_scap": 0.0,
-                "LFJ_hip": 0.0,
-                "LFJ_knee": 0.0,
+                "L_hip2_joint": 0.0,
             },
             damping={
-                "LFJ_scap": 0.0,
-                "LFJ_hip": 0.0,
-                "LFJ_knee": 0.0,
+                "L_hip2_joint": 0.0,
+            },
+        ),
+
+        "other_joints": ImplicitActuatorCfg(
+            joint_names_expr=[
+                "L_hip_joint", "L_thigh_joint", "L_calf_joint", "L_toe_joint",
+                "R_hip_joint", "R_thigh_joint", "R_calf_joint", "R_toe_joint", "R_hip2_joint"
+            ],
+            effort_limit=300.0,
+            velocity_limit=100.0,
+            stiffness={
+                "L_hip_joint": 10000.0,
+                "L_thigh_joint": 10000.0,
+                "L_calf_joint": 10000.0,
+                "L_toe_joint": 10000.0,
+                "R_hip_joint": 10000.0,
+                "R_thigh_joint": 10000.0,
+                "R_calf_joint": 10000.0,
+                "R_toe_joint": 10000.0,
+                "R_hip2_joint": 10000.0,
+            },
+            damping={
+                "L_hip_joint": 100.0,
+                "L_thigh_joint": 100.0,
+                "L_calf_joint": 100.0,
+                "L_toe_joint": 100.0,
+                "R_hip_joint": 100.0,
+                "R_thigh_joint": 100.0,
+                "R_calf_joint": 100.0,
+                "R_toe_joint": 100.0,
+                "R_hip2_joint": 100.0,
             },
         ),
     },
