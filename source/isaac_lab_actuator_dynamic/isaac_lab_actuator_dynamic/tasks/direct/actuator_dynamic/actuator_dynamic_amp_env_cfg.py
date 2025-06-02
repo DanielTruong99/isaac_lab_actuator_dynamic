@@ -26,10 +26,11 @@ class ActuatorDynamicEnvCfg(DirectRLEnvCfg):
 
     # rewards
     joint_torque_reward_scale = -2.5e-7
-    joint_accel_reward_scale = -2.5e-7
-    action_rate_reward_scale = -1e-2
+    joint_accel_reward_scale = 0.0
+    action_rate_reward_scale = -1e-3
     terminated_scale = -10.0
     alive_scale = 0.0
+    joint_torque_mimic_reward_scale = 3.0
 
     # env
     episode_length_s = 10.0
@@ -45,7 +46,11 @@ class ActuatorDynamicEnvCfg(DirectRLEnvCfg):
     early_termination = True
     termination_height = 0.5
 
-    motion_file: str = os.path.join(MOTIONS_DIR, "recorded_motor_data.npz")
+    # motion_file: str = [
+    #     os.path.join(MOTIONS_DIR, "recorded_motor_data_1.npz"),
+    #     os.path.join(MOTIONS_DIR, "recorded_motor_data_2.npz"),
+    # ]
+    motion_file: str = os.path.join(MOTIONS_DIR, "recorded_motor_data_1.npz")
     reference_body = "base"
     reset_strategy = "random"  # default, random, random-start
     """Strategy to be followed when resetting each environment (humanoid's pose and joint states).

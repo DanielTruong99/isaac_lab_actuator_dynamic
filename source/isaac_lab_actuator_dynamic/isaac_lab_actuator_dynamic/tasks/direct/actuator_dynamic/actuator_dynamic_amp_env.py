@@ -25,8 +25,8 @@ class ActuatorDynamicEnv(DirectRLEnv):
     def __init__(self, cfg: ActuatorDynamicEnvCfg, render_mode: str | None = None, **kwargs):
         super().__init__(cfg, render_mode, **kwargs)
 
-        self.action_offset = 0.5 * ( 2.0 * 50 )
-        self.action_scale = 2.0 * 50
+        self.action_offset = 0.0
+        self.action_scale = 1.0
 
         self.actions = torch.zeros(self.num_envs, self.cfg.action_space, device=self.device)
         self.previous_actions = torch.zeros(
@@ -42,6 +42,7 @@ class ActuatorDynamicEnv(DirectRLEnv):
                 "action_rate_l2",
                 "is_terminated",
                 "alive",
+                "joint_torque_mimic",
             ]
         }
 
@@ -119,15 +120,25 @@ class ActuatorDynamicEnv(DirectRLEnv):
         # action rate
         action_rate = torch.sum(torch.square(self.actions - self.previous_actions), dim=1)
 
+        # mimic recorded joint efforts
+        applied_torques = self.robot.data.applied_torque[:, self.key_joint_indexes]
+
+        # get motions
+        times = self.episode_length_buf.cpu().numpy() * self._motion_loader.dt
+        _, _, recorded_torques, = self._motion_loader.sample(num_samples=self.num_envs, times=times)
+        joint_torque_error = torch.sum(torch.square(applied_torques - recorded_torques), dim=1)
+        joint_torque_mimic = torch.exp(-joint_torque_error / 0.5)
+
         rewards = {
             "dof_torques_l2": joint_torques * self.cfg.joint_torque_reward_scale * self.step_dt,
             "dof_acc_l2": joint_accel * self.cfg.joint_accel_reward_scale * self.step_dt,
             "action_rate_l2": action_rate * self.cfg.action_rate_reward_scale * self.step_dt,
             "is_terminated": self.reset_terminated.float() * self.cfg.terminated_scale * self.step_dt,
             "alive": (1.0 - self.reset_terminated.float()) * self.cfg.alive_scale * self.step_dt,
+            "joint_torque_mimic": joint_torque_mimic * self.cfg.joint_torque_mimic_reward_scale * self.step_dt,
         }
         reward = torch.sum(torch.stack(list(rewards.values())), dim=0)
-        
+
         # logging
         for key, value in rewards.items():
             self._episode_sums[key] += value

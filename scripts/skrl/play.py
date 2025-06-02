@@ -96,6 +96,20 @@ import isaac_lab_actuator_dynamic.tasks  # noqa: F401
 # config shortcuts
 algorithm = args_cli.algorithm.lower()
 
+import rclpy
+from sensor_msgs.msg import JointState
+from isaacsim.core.utils.extensions import enable_extension
+
+enable_extension("isaacsim.ros2.bridge")
+simulation_app.update()
+rclpy.init()
+node = rclpy.create_node("play_skrl_agent")
+# create ros2 joint state publisher
+joint_state_publisher = node.create_publisher(
+    JointState, "/joint_states", 15
+)
+joint_state_msg = JointState()
+
 
 def main():
     """Play with skrl agent."""
@@ -189,6 +203,15 @@ def main():
                 actions = outputs[-1].get("mean_actions", outputs[0])
             # env stepping
             obs, _, _, _, _ = env.step(actions)
+
+        # publish joint states to ROS2
+        joint_state_msg.header.stamp = node.get_clock().now().to_msg()
+        joint_state_msg.position = env._unwrapped.robot.data.joint_pos[:, env._unwrapped.key_joint_indexes].cpu().numpy().flatten().tolist()
+        joint_state_msg.velocity = env._unwrapped.robot.data.joint_vel[:, env._unwrapped.key_joint_indexes].cpu().numpy().flatten().tolist()
+        joint_state_msg.effort = env._unwrapped.robot.data.applied_torque[:, env._unwrapped.key_joint_indexes].cpu().numpy().flatten().tolist()
+        joint_state_publisher.publish(joint_state_msg)
+    
+
         if args_cli.video:
             timestep += 1
             # exit the play loop after recording one video

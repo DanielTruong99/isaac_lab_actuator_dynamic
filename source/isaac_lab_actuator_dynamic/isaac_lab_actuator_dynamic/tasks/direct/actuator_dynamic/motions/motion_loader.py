@@ -24,19 +24,43 @@ class MotionLoader:
         Raises:
             AssertionError: If the specified motion file doesn't exist.
         """
-        assert os.path.isfile(motion_file), f"Invalid file path: {motion_file}"
-        data = np.load(motion_file)
+        # Support multiple motion files
+        if isinstance(motion_file, (list, tuple)):
+            data_list = []
+            fps = []
+            dof_names = []
+            dof_positions = []
+            dof_velocities = []
+            dof_efforts = []
+            dof_position_commands = []
+            for index, mf in enumerate(motion_file):
+                data_list.append(np.load(mf))
+                dof_names.append(data_list[index]["dof_names"].tolist())
+                fps.append(data_list[index]["fps"])
+                dof_positions.append(data_list[index]["dof_positions"])
+                dof_velocities.append(data_list[index]["dof_velocities"])
+                dof_efforts.append(data_list[index]["dof_efforts"])
+                dof_position_commands.append(data_list[index]["dof_position_commands"])
+        else:
+            assert os.path.isfile(motion_file), f"Invalid file path: {motion_file}"
+            data = np.load(motion_file)
+            dof_names = data["dof_names"].tolist()
+            fps = data["fps"]
+            dof_positions = data["dof_positions"]
+            dof_velocities = data["dof_velocities"]
+            dof_efforts = data["dof_efforts"]
+            dof_position_commands = data["dof_position_commands"]
 
         self.device = device
-        self._dof_names = data["dof_names"].tolist()
+        self._dof_names = dof_names
 
-        self.dof_positions = torch.tensor(data["dof_positions"], dtype=torch.float32, device=self.device)
-        self.dof_velocities = torch.tensor(data["dof_velocities"], dtype=torch.float32, device=self.device)
-        self.dof_efforts = torch.tensor(data["dof_efforts"], dtype=torch.float32, device=self.device)
-        self.dof_position_commands = torch.tensor(data["dof_position_commands"], dtype=torch.float32, device=self.device)
+        self.dof_positions = torch.tensor(dof_positions, dtype=torch.float32, device=self.device)
+        self.dof_velocities = torch.tensor(dof_velocities, dtype=torch.float32, device=self.device)
+        self.dof_efforts = torch.tensor(dof_efforts, dtype=torch.float32, device=self.device)
+        self.dof_position_commands = torch.tensor(dof_position_commands, dtype=torch.float32, device=self.device)
 
-        self.dt = 1.0 / data["fps"]
-        self.num_frames = self.dof_positions.shape[0]
+        self.dt = 1.0 / fps
+        self.num_frames = self.dof_position_commands.shape[0]
         self.duration = self.dt * (self.num_frames - 1)
         print(f"Motion loaded ({motion_file}): duration: {self.duration} sec, frames: {self.num_frames}")
 
