@@ -73,7 +73,7 @@ from isaaclab_rl.rsl_rl import RslRlOnPolicyRunnerCfg, RslRlVecEnvWrapper, expor
 import isaaclab_tasks  # noqa: F401
 from isaaclab_tasks.utils import get_checkpoint_path
 from isaaclab_tasks.utils.hydra import hydra_task_config
-
+import isaac_lab_actuator_dynamic.tasks  # noqa: F401
 # PLACEHOLDER: Extension template (do not remove this comment)
 
 
@@ -156,7 +156,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     )
 
     dt = env.unwrapped.step_dt
-
+    
     # reset environment
     obs, _ = env.get_observations()
     timestep = 0
@@ -169,6 +169,10 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
             actions = policy(obs)
             # env stepping
             obs, _, _, _ = env.step(actions)
+
+        # get applied torques
+        applied_torques = env.unwrapped.robot.data.applied_torques
+
         if args_cli.video:
             timestep += 1
             # Exit the play loop after recording one video

@@ -26,7 +26,7 @@ class ActuatorDynamic2Env(DirectRLEnv):
         super().__init__(cfg, render_mode, **kwargs)
 
         self.action_offset = 0.0
-        self.action_scale = 1e-5
+        self.action_scale = 1e-1
 
         self.actions = torch.zeros(self.num_envs, self.cfg.action_space, device=self.device)
         self.previous_actions = torch.zeros(
@@ -251,6 +251,8 @@ class ActuatorDynamic2Env(DirectRLEnv):
         )
         return amp_observation.view(-1, self.amp_observation_size)
 
+class ActuatorDynamic2PlayEnv(ActuatorDynamic2Env):
+    pass
 
 @torch.jit.script
 def quaternion_to_tangent_and_normal(q: torch.Tensor) -> torch.Tensor:

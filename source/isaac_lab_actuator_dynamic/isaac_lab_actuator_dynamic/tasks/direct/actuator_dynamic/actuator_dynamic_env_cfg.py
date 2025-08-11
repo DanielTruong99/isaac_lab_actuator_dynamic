@@ -39,7 +39,7 @@ class ActuatorDynamic2EnvCfg(DirectRLEnvCfg):
 
     # spaces
     observation_space = 10
-    action_space = 1
+    action_space = 5
     state_space = 0
 
     early_termination = True
@@ -75,3 +75,10 @@ class ActuatorDynamic2EnvCfg(DirectRLEnvCfg):
     # robot
     robot: ArticulationCfg = LEGACTUATORDYNAMIC_2_CFG.replace(prim_path="/World/envs/env_.*/Robot") # type: ignore
 
+@configclass
+class ActuatorDynamic2PlayEnvCfg(ActuatorDynamic2EnvCfg):
+    def __post_init__(self) -> None:
+        # post init of parent
+        super().__post_init__()
+
+        self.reset_strategy = "random-start"
