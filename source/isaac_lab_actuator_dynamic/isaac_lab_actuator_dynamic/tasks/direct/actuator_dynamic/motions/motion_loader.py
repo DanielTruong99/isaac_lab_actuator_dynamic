@@ -48,8 +48,8 @@ class MotionLoader:
             fps = data["fps"]
             dof_positions = data["dof_positions"]
             dof_velocities = data["dof_velocities"]
-            dof_efforts = data["dof_efforts"]
-            dof_position_commands = data["dof_position_commands"]
+            dof_efforts = dof_positions
+            dof_position_commands = dof_positions
 
         self.device = device
         self._dof_names = dof_names
