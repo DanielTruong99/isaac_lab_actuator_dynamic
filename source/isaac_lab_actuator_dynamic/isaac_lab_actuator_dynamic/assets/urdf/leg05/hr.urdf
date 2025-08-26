@@ -204,7 +204,7 @@
     type="revolute">
     <origin
       xyz="0.078 -0.014084 -0.0185"
-      rpy="0 0 0" />
+      rpy="0 -0.78539816339 0" />
     <parent
       link="L_hip2" />
     <child
@@ -212,8 +212,8 @@
     <axis
       xyz="0 1 0" />
     <limit
-      lower="-2.05"
-      upper="0"
+      lower="-1.26"
+      upper="0.78"
       effort="300"
       velocity="50" />
   </joint>
@@ -262,7 +262,7 @@
     type="revolute">
     <origin
       xyz="0 0 -0.35"
-      rpy="0 0 0" />
+      rpy="0 1.571 0" />
     <parent
       link="L_thigh" />
     <child
@@ -270,8 +270,8 @@
     <axis
       xyz="0 1 0" />
     <limit
-      lower="0"
-      upper="2.1"
+      lower="-1.571"
+      upper="0.529"
       effort="300"
       velocity="50" />
   </joint>
@@ -320,7 +320,7 @@
     type="revolute">
     <origin
       xyz="0 0 -0.35"
-      rpy="0 0 0" />
+      rpy="0 -0.78539815339 0" />
     <parent
       link="L_calf" />
     <child
@@ -522,7 +522,7 @@
     type="revolute">
     <origin
       xyz="0.078 0.014084 -0.0185"
-      rpy="0 0 0" />
+      rpy="0 -0.78539816339 0" />
     <parent
       link="R_hip2" />
     <child
@@ -530,8 +530,8 @@
     <axis
       xyz="0 1 0" />
     <limit
-      lower="-2.05"
-      upper="0"
+      lower="-1.76"
+      upper="0.78"
       effort="300"
       velocity="50" />
   </joint>
@@ -580,7 +580,7 @@
     type="revolute">
     <origin
       xyz="0 0 -0.35"
-      rpy="0 0 0" />
+      rpy="0 1.571 0" />
     <parent
       link="R_thigh" />
     <child
@@ -588,8 +588,8 @@
     <axis
       xyz="0 1 0" />
     <limit
-      lower="0"
-      upper="2.1"
+      lower="-1.571"
+      upper="0.529"
       effort="300"
       velocity="50" />
   </joint>
@@ -638,7 +638,7 @@
     type="revolute">
     <origin
       xyz="0 0 -0.35"
-      rpy="0 0 0" />
+      rpy="0 -0.78539815339 0" />
     <parent
       link="R_calf" />
     <child
