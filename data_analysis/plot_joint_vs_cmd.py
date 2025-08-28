@@ -84,9 +84,9 @@ def plot_joint_vs_cmd(
         base = os.path.splitext(os.path.basename(csv_path))[0]
         safe_joint = joint_name.replace('/', '_')
         out_png = f"{base}_{safe_joint}_state_cmd_tau.png"
-    fig.savefig(out_png, dpi=150)
-    plt.close(fig)
-    print(f"Saved plot to {out_png}")
+    # fig.savefig(out_png, dpi=150)
+    plt.show()
+    # print(f"Saved plot to {out_png}")
 
 
 def plot_left_joints_grid(
@@ -158,9 +158,7 @@ def plot_left_joints_grid(
     if out_png is None:
         base = os.path.splitext(os.path.basename(csv_path))[0]
         out_png = f"{base}_L_left_all_state_cmd_tau.png"
-    fig.savefig(out_png, dpi=160)
-    plt.close(fig)
-    print(f"Saved multi-plot to {out_png}")
+    plt.show(fig)
 
 
 def plot_left_histograms_window(
