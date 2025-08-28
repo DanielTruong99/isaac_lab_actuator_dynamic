@@ -156,7 +156,7 @@ class ActuatorDynamic2Env(DirectRLEnv):
         
         # resample reference motions for used to compute observations, rewards, ...
         times = self.episode_length_buf * self._motion_loader.dt[self._motion_ids]
-        self.recorded_joint_pos, self.recorded_joint_vels, self.recorded_torques = self._motion_loader.sample(self._motion_ids, times=times)
+        self.recorded_joint_pos, self.recorded_joint_vels, self.recorded_torques = self._motion_loader.sample(self._motion_ids, motion_times=times)
 
     def _setup_scene(self):
         # add robot
@@ -320,11 +320,11 @@ class ActuatorDynamic2Env(DirectRLEnv):
             dof_positions,
             dof_velocities,
             dof_currents,
-        ) = self._motion_loader.sample(self._motion_ids, times=times)
+        ) = self._motion_loader.sample(self._motion_ids, motion_times=times)
 
         # get DOFs state
-        dof_pos = dof_positions[:, self.motion_dof_indexes]
-        dof_vel = dof_velocities[:, self.motion_dof_indexes]
+        dof_pos = dof_positions[env_ids][:, self.motion_dof_indexes]
+        dof_vel = dof_velocities[env_ids][:, self.motion_dof_indexes]
 
         return dof_pos, dof_vel
 

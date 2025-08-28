@@ -10,13 +10,13 @@ from isaaclab_rl.rsl_rl import RslRlOnPolicyRunnerCfg, RslRlPpoActorCriticCfg, R
 
 @configclass
 class ActuatorDynamicPPORunnerCfg(RslRlOnPolicyRunnerCfg):
-    num_steps_per_env = 28
+    num_steps_per_env = 32
     max_iterations = 10000
     save_interval = 50
     experiment_name = "actuator_dynamic"
     empirical_normalization = False
     policy = RslRlPpoActorCriticCfg(
-        init_noise_std=0.3,
+        init_noise_std=0.5,
         actor_hidden_dims=[256, 256, 256],
         critic_hidden_dims=[256, 256, 256],
         activation="elu",

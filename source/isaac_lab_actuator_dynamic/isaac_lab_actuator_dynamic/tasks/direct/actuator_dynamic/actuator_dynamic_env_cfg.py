@@ -29,9 +29,9 @@ class ActuatorDynamic2EnvCfg(DirectRLEnvCfg):
     joint_accel_reward_scale = 0.0
     action_rate_reward_scale = -1e-3
     terminated_scale = -10.0
-    alive_scale = 1.0
+    alive_scale = 0.0
     joint_pos_mimic_reward_scale = 5.0
-    joint_vel_mimic_reward_scale = 3.0
+    joint_vel_mimic_reward_scale = 5.0
 
     # env
     episode_length_s = 30.0
@@ -46,9 +46,9 @@ class ActuatorDynamic2EnvCfg(DirectRLEnvCfg):
     termination_height = 0.5
 
     motion_file: str = [
-        os.path.join(MOTIONS_DIR, "recorded_motor_data_1.npz"),
-        os.path.join(MOTIONS_DIR, "recorded_motor_data_2.npz"),
-    ] 
+        os.path.join(MOTIONS_DIR, "recorded_real_motor_data_1.npz"),
+        os.path.join(MOTIONS_DIR, "recorded_real_motor_data_2.npz"),
+    ]
     # motion_file: str = os.path.join(MOTIONS_DIR, "ik_trajectory_data.npz")
     reference_body = "base"
     reset_strategy = "random"  # default, random, random-start

@@ -37,7 +37,7 @@ class MotionLoader:
             motion_duration = []
             motion_num_frames = []
             for index, mf in enumerate(motion_file):
-                data_list.append(np.load(mf))
+                data_list.append(np.load(mf, allow_pickle=True))
                 dof_names.append(data_list[index]["dof_names"].tolist())
                 fps.append(data_list[index]["fps"])
                 dof_positions.append(data_list[index]["dof_positions"])
@@ -62,10 +62,10 @@ class MotionLoader:
         self.device = device
         self._dof_names = dof_names
 
-        self.dof_positions = torch.tensor(dof_positions, dtype=torch.float32, device=self.device)
-        self.dof_velocities = torch.tensor(dof_velocities, dtype=torch.float32, device=self.device)
-        self.dof_efforts = torch.tensor(dof_efforts, dtype=torch.float32, device=self.device)
-        self.dof_position_commands = torch.tensor(dof_position_commands, dtype=torch.float32, device=self.device)
+        self.dof_positions = torch.from_numpy(np.concatenate(dof_positions, axis=0)).to(device=self.device, dtype=torch.float32)
+        self.dof_velocities = torch.from_numpy(np.concatenate(dof_velocities, axis=0)).to(device=self.device, dtype=torch.float32)
+        self.dof_efforts = torch.from_numpy(np.concatenate(dof_efforts, axis=0)).to(device=self.device, dtype=torch.float32)
+        self.dof_position_commands = torch.from_numpy(np.concatenate(dof_position_commands, axis=0)).to(device=self.device, dtype=torch.float32)
 
         self.dt = torch.tensor(motion_dt, dtype=torch.float32, device=self.device)
         self.num_frames = torch.tensor(motion_num_frames, dtype=torch.int32, device=self.device)
@@ -215,7 +215,6 @@ class MotionLoader:
         dt = self.dt[motion_ids]
 
         index_0, index_1, blend = self._compute_frame_blend(motion_times, motion_len, num_frames, dt)
-        blend = torch.tensor(blend, dtype=torch.float32, device=self.device)
         index_0 = index_0 + self.start_motion_ids[motion_ids]
         index_1 = index_1 + self.start_motion_ids[motion_ids]
 

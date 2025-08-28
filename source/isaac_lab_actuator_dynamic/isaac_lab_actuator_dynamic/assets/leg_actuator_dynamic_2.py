@@ -4,7 +4,7 @@ from isaaclab.actuators import ActuatorNetMLPCfg, DCMotorCfg, ImplicitActuatorCf
 from isaaclab.assets.articulation import ArticulationCfg
 from isaac_lab_actuator_dynamic.assets import LOCAL_ASSETS_DATA_DIR
 
-LEGACTUATORDYNAMIC_USD_PATH = f"{LOCAL_ASSETS_DATA_DIR}/Robots/Aidin/hr.usd"
+LEGACTUATORDYNAMIC_USD_PATH = f"/home/humanoid2/DanielTruong/isaac_lab_actuator_dynamic/source/isaac_lab_actuator_dynamic/isaac_lab_actuator_dynamic/assets/usd/leg05.usd"
 
 LEGACTUATORDYNAMIC_2_CFG = ArticulationCfg(
     spawn=sim_utils.UsdFileCfg(
@@ -51,6 +51,25 @@ LEGACTUATORDYNAMIC_2_CFG = ArticulationCfg(
                 "L_toe_joint": 1.0,
             },
         ),
+        "right_leg": IdealPDActuatorCfg(
+            joint_names_expr=["R_hip2_joint", "R_hip_joint", "R_thigh_joint", "R_calf_joint", "R_toe_joint"],
+            effort_limit=300.0,
+            velocity_limit=50.0,
+            stiffness={
+                "R_hip_joint": 1000.0,
+                "R_hip2_joint": 1000.0,
+                "R_thigh_joint": 1000.0,
+                "R_calf_joint": 1000.0,
+                "R_toe_joint": 1000.0,
+            },
+            damping={
+                "R_hip_joint": 3.0,
+                "R_hip2_joint": 4.0,
+                "R_thigh_joint": 4.0,
+                "R_calf_joint": 1.0,
+                "R_toe_joint": 1.0,
+            },
+        ),        
     },
 )
 
