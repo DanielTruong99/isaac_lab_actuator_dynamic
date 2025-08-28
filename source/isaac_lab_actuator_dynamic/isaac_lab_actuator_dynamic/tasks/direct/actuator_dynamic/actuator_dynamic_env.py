@@ -11,7 +11,7 @@ import torch
 
 import isaaclab.sim as sim_utils
 from isaaclab.assets import Articulation
-from isaaclab.envs import DirectRLEnv
+from isaaclab.envs import DirectRLEnv, VecEnvStepReturn
 from isaaclab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
 from isaaclab.utils.math import quat_rotate, quat_apply
 
@@ -29,6 +29,7 @@ class ActuatorDynamic2Env(DirectRLEnv):
         self.action_scale = 1e-1
 
         self.actions = torch.zeros(self.num_envs, self.cfg.action_space, device=self.device)
+        self.joint_pos_cmds = torch.zeros(self.num_envs, self.cfg.action_space, device=self.device)
         self.previous_actions = torch.zeros(
             self.num_envs, self.cfg.action_space, device=self.device
         )
@@ -47,8 +48,10 @@ class ActuatorDynamic2Env(DirectRLEnv):
             ]
         }
 
-        # load motion
+        # load motion and samples motion_ids
         self._motion_loader = MotionLoader(motion_file=self.cfg.motion_file, device=self.device) # type: ignore
+        motion_probs = torch.ones(self._motion_loader.num_motions, device=self.device) / self._motion_loader.num_motions
+        self._motion_ids = torch.multinomial(motion_probs, self.num_envs, replacement=True)
 
         # DOF and key body indexes
         #! Need to be changed
@@ -58,6 +61,102 @@ class ActuatorDynamic2Env(DirectRLEnv):
         self.ref_body_index = self.robot.data.body_names.index('base')
         self.key_body_indexes = [self.robot.data.body_names.index(name) for name in key_body_names]
         self.motion_dof_indexes = self._motion_loader.get_dof_index(key_dof_names)
+
+    def step(self, action: torch.Tensor) -> VecEnvStepReturn:
+        """Execute one time-step of the environment's dynamics.
+
+        The environment steps forward at a fixed time-step, while the physics simulation is decimated at a
+        lower time-step. This is to ensure that the simulation is stable. These two time-steps can be configured
+        independently using the :attr:`DirectRLEnvCfg.decimation` (number of simulation steps per environment step)
+        and the :attr:`DirectRLEnvCfg.sim.physics_dt` (physics time-step). Based on these parameters, the environment
+        time-step is computed as the product of the two.
+
+        This function performs the following steps:
+
+        1. Pre-process the actions before stepping through the physics.
+        2. Apply the actions to the simulator and step through the physics in a decimated manner.
+        3. Compute the reward and done signals.
+        4. Reset environments that have terminated or reached the maximum episode length.
+        5. Apply interval events if they are enabled.
+        6. Compute observations.
+
+        Args:
+            action: The actions to apply on the environment. Shape is (num_envs, action_dim).
+
+        Returns:
+            A tuple containing the observations, rewards, resets (terminated and truncated) and extras.
+        """
+        action = action.to(self.device)
+        # add action noise
+        if self.cfg.action_noise_model:
+            action = self._action_noise_model(action)
+
+        # process actions
+        self._pre_physics_step(action)
+
+        # check if we need to do rendering within the physics loop
+        # note: checked here once to avoid multiple checks within the loop
+        is_rendering = self.sim.has_gui() or self.sim.has_rtx_sensors()
+
+        # perform physics stepping
+        for _ in range(self.cfg.decimation):
+            self._sim_step_counter += 1
+            # set actions into buffers
+            self._apply_action()
+            # set actions into simulator
+            self.scene.write_data_to_sim()
+            # simulate
+            self.sim.step(render=False)
+            # render between steps only if the GUI or an RTX sensor needs it
+            # note: we assume the render interval to be the shortest accepted rendering interval.
+            #    If a camera needs rendering at a faster frequency, this will lead to unexpected behavior.
+            if self._sim_step_counter % self.cfg.sim.render_interval == 0 and is_rendering:
+                self.sim.render()
+            # update buffers at sim dt
+            self.scene.update(dt=self.physics_dt)
+
+        # post-step:
+        self._post_physics_steps()
+
+        self.reset_terminated[:], self.reset_time_outs[:] = self._get_dones()
+        self.reset_buf = self.reset_terminated | self.reset_time_outs
+        self.reward_buf = self._get_rewards()
+
+        # -- reset envs that terminated/timed-out and log the episode information
+        reset_env_ids = self.reset_buf.nonzero(as_tuple=False).squeeze(-1)
+        if len(reset_env_ids) > 0:
+            self._reset_idx(reset_env_ids)
+            # update articulation kinematics
+            self.scene.write_data_to_sim()
+            self.sim.forward()
+            # if sensors are added to the scene, make sure we render to reflect changes in reset
+            if self.sim.has_rtx_sensors() and self.cfg.rerender_on_reset:
+                self.sim.render()
+
+        # post-step: step interval event
+        if self.cfg.events:
+            if "interval" in self.event_manager.available_modes:
+                self.event_manager.apply(mode="interval", dt=self.step_dt)
+
+        # update observations
+        self.obs_buf = self._get_observations()
+
+        # add observation noise
+        # note: we apply no noise to the state space (since it is used for critic networks)
+        if self.cfg.observation_noise_model:
+            self.obs_buf["policy"] = self._observation_noise_model(self.obs_buf["policy"])
+
+        # return observations, rewards, resets and extras
+        return self.obs_buf, self.reward_buf, self.reset_terminated, self.reset_time_outs, self.extras
+
+    def _post_physics_steps(self):
+        # -- update env counters (used for curriculum generation)
+        self.episode_length_buf += 1  # step in current episode (per env)
+        self.common_step_counter += 1  # total step (common for all envs)        
+        
+        # resample reference motions for used to compute observations, rewards, ...
+        times = self.episode_length_buf * self._motion_loader.dt[self._motion_ids]
+        self.recorded_joint_pos, self.recorded_joint_vels, self.recorded_torques = self._motion_loader.sample(self._motion_ids, times=times)
 
     def _setup_scene(self):
         # add robot
@@ -78,6 +177,10 @@ class ActuatorDynamic2Env(DirectRLEnv):
 
     def _pre_physics_step(self, actions: torch.Tensor):
         self.actions = actions.clone()
+        
+        # get joint position cmds
+        times = self.episode_length_buf * self._motion_loader.dt[self._motion_ids]
+        self.joint_pos_cmds, _, _, = self._motion_loader.sample(self._motion_ids, times)
 
     def _apply_action(self):
         """
@@ -88,6 +191,9 @@ class ActuatorDynamic2Env(DirectRLEnv):
         # target = self.actions
         self.robot.set_joint_effort_target(target, self.key_joint_indexes)
 
+        # get joint positions cmds from motion loader to feed into this one
+        self.robot.set_joint_position_target(self.joint_pos_cmds, self.key_joint_indexes)
+
     def _get_observations(self) -> dict:
         self.previous_actions = self.actions.clone()
 
@@ -96,7 +202,7 @@ class ActuatorDynamic2Env(DirectRLEnv):
             (
                 self.robot.data.joint_pos[:, self.key_joint_indexes],
                 self.robot.data.joint_vel[:, self.key_joint_indexes],
-                # self.previous_actions,
+                self.previous_actions,
             ),
             dim=-1,
         )
@@ -113,16 +219,11 @@ class ActuatorDynamic2Env(DirectRLEnv):
         # action rate
         action_rate = torch.sum(torch.square(self.actions - self.previous_actions), dim=1)
 
-        # mimic recorded joint efforts
-        applied_torques = self.robot.data.applied_torque[:, self.key_joint_indexes]
-
-        # get motions
-        times = self.episode_length_buf.cpu().numpy() * self._motion_loader.dt
-        recorded_joint_pos, recorded_joint_vels, recorded_torques, = self._motion_loader.sample(num_samples=self.num_envs, times=times)
-        joint_pos_error = torch.sum(torch.square(self.robot.data.joint_pos[:, self.key_joint_indexes] - recorded_joint_pos), dim=1)
+        # reference motions
+        joint_pos_error = torch.sum(torch.square(self.robot.data.joint_pos[:, self.key_joint_indexes] - self.recorded_joint_pos), dim=1)
         joint_pos_mimic = torch.exp(-joint_pos_error / 0.5)
 
-        joint_vels_error = torch.sum(torch.square(self.robot.data.joint_vel[:, self.key_joint_indexes] - recorded_joint_vels), dim=1)
+        joint_vels_error = torch.sum(torch.square(self.robot.data.joint_vel[:, self.key_joint_indexes] - self.recorded_joint_vels), dim=1)
         joint_vel_mimic = torch.exp(-joint_vels_error / 0.5)
 
         rewards = {
@@ -144,7 +245,10 @@ class ActuatorDynamic2Env(DirectRLEnv):
 
 
     def _get_dones(self) -> tuple[torch.Tensor, torch.Tensor]:
-        time_out = self.episode_length_buf >= self.max_episode_length - 1
+        time_out = self.episode_length_buf >= self.max_episode_length - 1 
+        # time out by end of reference motions
+        current_times = self.episode_length_buf * self._motion_loader.dt[self._motion_ids]
+        time_out = torch.logical_or(time_out, current_times >= self._motion_loader.duration[self._motion_ids])
         if self.cfg.early_termination:
             # died = self.robot.data.body_pos_w[:, self.ref_body_index, 2] < self.cfg.termination_height
             # check dof position limits
@@ -210,17 +314,13 @@ class ActuatorDynamic2Env(DirectRLEnv):
         self, env_ids: torch.Tensor, start: bool = False
     ) -> tuple[torch.Tensor, torch.Tensor]:
         # sample random motion times (or zeros if start is True)
-        num_samples = env_ids.shape[0]
-        times = np.zeros(num_samples) if start else self._motion_loader.sample_times(num_samples)
+        times = self._motion_loader.sample_times(self._motion_ids)
         # sample random motions
         (
             dof_positions,
             dof_velocities,
             dof_currents,
-        ) = self._motion_loader.sample(num_samples=num_samples, times=times)
-
-        # dof_positions = dof_positions.unsqueeze(-1)
-        # dof_velocities = dof_velocities.unsqueeze(-1)
+        ) = self._motion_loader.sample(self._motion_ids, times=times)
 
         # get DOFs state
         dof_pos = dof_positions[:, self.motion_dof_indexes]
@@ -228,28 +328,7 @@ class ActuatorDynamic2Env(DirectRLEnv):
 
         return dof_pos, dof_vel
 
-    # env methods
 
-    def collect_reference_motions(self, num_samples: int, current_times: np.ndarray | None = None) -> torch.Tensor:
-        # sample random motion times (or use the one specified)
-        if current_times is None:
-            current_times = self._motion_loader.sample_times(num_samples)
-        times = (
-            np.expand_dims(current_times, axis=-1)
-            - self._motion_loader.dt * np.arange(0, self.cfg.num_amp_observations)
-        ).flatten()
-        # get motions
-        (
-            dof_positions,
-            dof_velocities,
-            dof_currents,
-        ) = self._motion_loader.sample(num_samples=num_samples, times=times)
-        # compute AMP observation
-        amp_observation = compute_obs(
-            dof_positions,
-            dof_velocities,
-        )
-        return amp_observation.view(-1, self.amp_observation_size)
 
 class ActuatorDynamic2PlayEnv(ActuatorDynamic2Env):
     pass
@@ -264,17 +343,3 @@ def quaternion_to_tangent_and_normal(q: torch.Tensor) -> torch.Tensor:
     normal = quat_apply(q, ref_normal)
     return torch.cat([tangent, normal], dim=len(tangent.shape) - 1)
 
-
-@torch.jit.script
-def compute_obs(
-    dof_positions: torch.Tensor,
-    dof_velocities: torch.Tensor,
-) -> torch.Tensor:
-    obs = torch.cat(
-        (
-            dof_positions,
-            dof_velocities,
-        ),
-        dim=-1,
-    )
-    return obs

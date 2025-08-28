@@ -34,8 +34,8 @@ class ActuatorDynamic2EnvCfg(DirectRLEnvCfg):
     joint_vel_mimic_reward_scale = 3.0
 
     # env
-    episode_length_s = 3.0
-    decimation = 1
+    episode_length_s = 30.0
+    decimation = 2
 
     # spaces
     observation_space = 10
@@ -45,11 +45,11 @@ class ActuatorDynamic2EnvCfg(DirectRLEnvCfg):
     early_termination = True
     termination_height = 0.5
 
-    # motion_file: str = [
-    #     os.path.join(MOTIONS_DIR, "recorded_motor_data_1.npz"),
-    #     os.path.join(MOTIONS_DIR, "recorded_motor_data_2.npz"),
-    # ]
-    motion_file: str = os.path.join(MOTIONS_DIR, "ik_trajectory_data.npz")
+    motion_file: str = [
+        os.path.join(MOTIONS_DIR, "recorded_motor_data_1.npz"),
+        os.path.join(MOTIONS_DIR, "recorded_motor_data_2.npz"),
+    ] 
+    # motion_file: str = os.path.join(MOTIONS_DIR, "ik_trajectory_data.npz")
     reference_body = "base"
     reset_strategy = "random"  # default, random, random-start
     """Strategy to be followed when resetting each environment (humanoid's pose and joint states).
