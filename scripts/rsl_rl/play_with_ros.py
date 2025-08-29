@@ -54,6 +54,8 @@ import gymnasium as gym
 import os
 import time
 import torch
+import matplotlib.pyplot as plt
+import numpy as np
 
 from rsl_rl.runners import OnPolicyRunner
 
@@ -76,6 +78,20 @@ from isaaclab_tasks.utils.hydra import hydra_task_config
 import isaac_lab_actuator_dynamic.tasks  # noqa: F401
 # PLACEHOLDER: Extension template (do not remove this comment)
 
+# from isaacsim.core.utils.extensions import enable_extension
+# enable_extension("isaacsim.ros2.bridge")
+# simulation_app.update()
+
+
+# import rclpy
+# from sensor_msgs.msg import JointState
+
+# rclpy.init()
+# node = rclpy.create_node('Humanoid_HWITL')
+# pub_joint_states = node.create_publisher(JointState, '/joint_states', 10)
+# pub_joint_cmds = node.create_publisher(JointState, '/joint_cmds', 10)
+# joint_states_msg = JointState()
+# joint_cmds_msg = JointState()
 
 @hydra_task_config(args_cli.task, "rsl_rl_cfg_entry_point")
 def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agent_cfg: RslRlOnPolicyRunnerCfg):
@@ -159,7 +175,18 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     
     # reset environment
     obs, _ = env.get_observations()
+    joint_data = []
+    joint_cmd_data = []
+    joint_key_ids = env.unwrapped.key_joint_indexes
+    joint_position = env.unwrapped.robot.data.joint_pos[:, joint_key_ids].cpu().numpy().tolist()
+    joint_data += joint_position
+    joint_cmd = env.unwrapped.joint_pos_cmds.cpu().numpy().tolist()
+    joint_cmd_data += joint_cmd
     timestep = 0
+
+    residual_torque_data = []
+    applied_torque_data = []
+    
     # simulate environment
     while simulation_app.is_running():
         start_time = time.time()
@@ -168,10 +195,57 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
             # agent stepping
             actions = policy(obs)
             # env stepping
-            obs, _, _, _ = env.step(actions)
+            obs, _, dones, _ = env.step(actions)
+
+        # # get joint states
+        joint_key_ids = env.unwrapped.key_joint_indexes
+        joint_position = env.unwrapped.robot.data.joint_pos[:, joint_key_ids].cpu().numpy().tolist()
+        joint_data += joint_position
+
+        # get joint commands
+        joint_pos_cmd = env.unwrapped.joint_pos_cmds.cpu().numpy().tolist()
+        joint_cmd_data += joint_pos_cmd
+
+        # get residual torques
+        residual_torques = env.unwrapped.residual_torques.cpu().numpy().tolist()
+        residual_torque_data += residual_torques
 
         # get applied torques
-        # applied_torques = env.unwrapped.robot.data.applied_torques
+        applied_torques = env.unwrapped.robot.data.applied_torque[:, joint_key_ids].cpu().numpy().tolist()
+        applied_torque_data += applied_torques
+
+        if dones.any():
+            print("[INFO] Episode done, resetting the environment...")
+            # plot the  joint positions
+            joint_data = np.array(joint_data)
+            joint_cmd_data = np.array(joint_cmd_data)
+            residual_torque_data = np.array(residual_torque_data)
+            applied_torque_data = np.array(applied_torque_data)
+            time_data = np.arange(joint_data.shape[0]) * dt
+            for i in range(joint_data.shape[1]):
+                plt.figure()
+                plt.plot(time_data, joint_data[:, i], label='Joint Position')
+                plt.plot(time_data, joint_cmd_data[:, i], label='Joint Command', linestyle='--')
+                plt.xlabel('Time (s)')
+                plt.ylabel('Position (rad)')
+                plt.title(f'Joint {i} Position vs Command')
+                plt.legend()
+                plt.grid()
+
+            time_data = np.arange(residual_torque_data.shape[0]) * dt
+            for i in range(residual_torque_data.shape[1]):
+                plt.figure()
+                plt.plot(time_data, residual_torque_data[:, i], label='Residual Torque')
+                plt.plot(time_data, applied_torque_data[:, i], label='Applied Torque', linestyle='--')
+                plt.xlabel('Time (s)')
+                plt.ylabel('Torque (Nm)')
+                plt.title(f'Joint {i} Residual vs Applied Torque')
+                plt.legend()
+                plt.grid()
+            plt.show()
+
+            joint_data = []
+            joint_cmd_data = []
 
         if args_cli.video:
             timestep += 1

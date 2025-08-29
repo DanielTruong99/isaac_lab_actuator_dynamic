@@ -19,23 +19,40 @@ from isaaclab.utils import configclass
 
 MOTIONS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "motions")
 
+@configclass
+class RandomScaleCfg:
+    joint_pos = {
+        'L_hip_joint': [-0.1, 0.1],
+        'L_hip2_joint': [-0.1, 0.1],
+        'L_thigh_joint': [-0.3, 0.3],
+        'L_calf_joint': [-0.1, 0.0],
+        'L_toe_joint': [-0.1, 0.1],
+    }
+    joint_vel = {
+        'L_hip_joint': [-0.05, 0.05],
+        'L_hip2_joint': [-0.05, 0.05],
+        'L_thigh_joint': [-0.05, 0.05],
+        'L_calf_joint': [-0.05, 0.05],
+        'L_toe_joint': [-0.05, 0.05],
+    }
 
 @configclass
 class ActuatorDynamic2EnvCfg(DirectRLEnvCfg):
     """Actuator Dynamic AMP environment config (base class)."""
 
     # rewards
-    joint_torque_reward_scale = -2.5e-5
+    joint_torque_reward_scale = -2.5e-6
     joint_accel_reward_scale = 0.0
     action_rate_reward_scale = -1e-3
     terminated_scale = -10.0
-    alive_scale = 0.0
+    alive_scale = 1.0
     joint_pos_mimic_reward_scale = 5.0
-    joint_vel_mimic_reward_scale = 5.0
+    joint_vel_mimic_reward_scale = 3.0
+    joint_pos_bonus_reward_scale = 10.0
 
     # env
     episode_length_s = 30.0
-    decimation = 2
+    decimation = 1
 
     # spaces
     observation_space = 10
@@ -46,7 +63,7 @@ class ActuatorDynamic2EnvCfg(DirectRLEnvCfg):
     termination_height = 0.5
 
     motion_file: str = [
-        os.path.join(MOTIONS_DIR, "recorded_real_motor_data_1.npz"),
+        # os.path.join(MOTIONS_DIR, "recorded_real_motor_data_1.npz"),
         os.path.join(MOTIONS_DIR, "recorded_real_motor_data_2.npz"),
     ]
     # motion_file: str = os.path.join(MOTIONS_DIR, "ik_trajectory_data.npz")
@@ -59,9 +76,13 @@ class ActuatorDynamic2EnvCfg(DirectRLEnvCfg):
     * random-start: pose and joint states are set by sampling motion at the start (time zero).
     """
 
+    # reset noise
+    randomize_initial_state = True
+    random_scale_cfg = RandomScaleCfg()
+
     # simulation
     sim: SimulationCfg = SimulationCfg(
-        dt=0.001,
+        dt=0.002,
         render_interval=decimation,
         physx=PhysxCfg(
             gpu_found_lost_pairs_capacity=2**23,
@@ -82,3 +103,7 @@ class ActuatorDynamic2PlayEnvCfg(ActuatorDynamic2EnvCfg):
         super().__post_init__()
 
         self.reset_strategy = "random-start"
+        
+
+        self.motion_file = [os.path.join(MOTIONS_DIR, "recorded_real_motor_data_2.npz")]
+

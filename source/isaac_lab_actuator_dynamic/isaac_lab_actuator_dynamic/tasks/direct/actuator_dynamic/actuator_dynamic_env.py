@@ -26,13 +26,14 @@ class ActuatorDynamic2Env(DirectRLEnv):
         super().__init__(cfg, render_mode, **kwargs)
 
         self.action_offset = 0.0
-        self.action_scale = 1e-1
+        self.action_scale = 1.0
 
         self.actions = torch.zeros(self.num_envs, self.cfg.action_space, device=self.device)
         self.joint_pos_cmds = torch.zeros(self.num_envs, self.cfg.action_space, device=self.device)
         self.previous_actions = torch.zeros(
             self.num_envs, self.cfg.action_space, device=self.device
         )
+        self.residual_torques = torch.zeros_like(self.actions)
 
         # logging
         self._episode_sums = {
@@ -45,6 +46,7 @@ class ActuatorDynamic2Env(DirectRLEnv):
                 "alive",
                 "joint_pos_mimic",
                 "joint_vel_mimic",
+                "position_bonus",
             ]
         }
 
@@ -55,12 +57,12 @@ class ActuatorDynamic2Env(DirectRLEnv):
 
         # DOF and key body indexes
         #! Need to be changed
-        key_dof_names = ["L_hip_joint", "L_hip2_joint", "L_thigh_joint", "L_calf_joint", "L_toe_joint"]
+        self.key_dof_names = ["L_hip_joint", "L_hip2_joint", "L_thigh_joint", "L_calf_joint", "L_toe_joint"]
         key_body_names = ["L_hip2", "L_thigh", "L_calf", "L_toe"]
-        self.key_joint_indexes = self.robot.find_joints(key_dof_names)[0]
+        self.key_joint_indexes = self.robot.find_joints(self.key_dof_names)[0]
         self.ref_body_index = self.robot.data.body_names.index('base')
         self.key_body_indexes = [self.robot.data.body_names.index(name) for name in key_body_names]
-        self.motion_dof_indexes = self._motion_loader.get_dof_index(key_dof_names)
+        self.motion_dof_indexes = self._motion_loader.get_dof_index(self.key_dof_names)
 
     def step(self, action: torch.Tensor) -> VecEnvStepReturn:
         """Execute one time-step of the environment's dynamics.
@@ -187,9 +189,9 @@ class ActuatorDynamic2Env(DirectRLEnv):
             The action is the joint torques applied to the robot.
             The action is scaled to the joint torque limits and added to the joint efforts target.
         """
-        target = self.action_offset + self.action_scale * self.actions
+        self.residual_torques = self.action_offset + self.action_scale * self.actions
         # target = self.actions
-        self.robot.set_joint_effort_target(target, self.key_joint_indexes)
+        self.robot.set_joint_effort_target(self.residual_torques, self.key_joint_indexes)
 
         # get joint positions cmds from motion loader to feed into this one
         self.robot.set_joint_position_target(self.joint_pos_cmds, self.key_joint_indexes)
@@ -200,6 +202,7 @@ class ActuatorDynamic2Env(DirectRLEnv):
         # build task observation
         obs = torch.cat(
             (
+                self.joint_pos_cmds,
                 self.robot.data.joint_pos[:, self.key_joint_indexes],
                 self.robot.data.joint_vel[:, self.key_joint_indexes],
                 self.previous_actions,
@@ -221,7 +224,15 @@ class ActuatorDynamic2Env(DirectRLEnv):
 
         # reference motions
         joint_pos_error = torch.sum(torch.square(self.robot.data.joint_pos[:, self.key_joint_indexes] - self.recorded_joint_pos), dim=1)
-        joint_pos_mimic = torch.exp(-joint_pos_error / 0.5)
+        # joint_pos_mimic = torch.exp(-joint_pos_error / 0.5)
+        joint_pos_mimic = (
+            - 15.0 * joint_pos_error
+            + 1.0 / (torch.exp(-10 * joint_pos_error) + torch.exp(10 * joint_pos_error) + 1e-6)
+            + 1.0 / (torch.exp(-700 * joint_pos_error) + torch.exp(700 * joint_pos_error) + 1e-6)
+        )
+        joint_pos_error_mean = torch.mean(torch.abs(self.robot.data.joint_pos[:, self.key_joint_indexes] - self.recorded_joint_pos), dim=1)
+        position_bonus = joint_pos_error_mean < 1e-3
+        position_bonus = position_bonus.float()
 
         joint_vels_error = torch.sum(torch.square(self.robot.data.joint_vel[:, self.key_joint_indexes] - self.recorded_joint_vels), dim=1)
         joint_vel_mimic = torch.exp(-joint_vels_error / 0.5)
@@ -234,6 +245,7 @@ class ActuatorDynamic2Env(DirectRLEnv):
             "alive": (1.0 - self.reset_terminated.float()) * self.cfg.alive_scale * self.step_dt,
             "joint_pos_mimic": joint_pos_mimic * self.cfg.joint_pos_mimic_reward_scale * self.step_dt,
             "joint_vel_mimic": joint_vel_mimic * self.cfg.joint_vel_mimic_reward_scale * self.step_dt,
+            "position_bonus": position_bonus * self.cfg.joint_pos_bonus_reward_scale * self.step_dt,
         }
         reward = torch.sum(torch.stack(list(rewards.values())), dim=0)
 
@@ -288,6 +300,21 @@ class ActuatorDynamic2Env(DirectRLEnv):
         else:
             raise ValueError(f"Unknown reset strategy: {self.cfg.reset_strategy}")
 
+        # add noise
+        if self.cfg.randomize_initial_state:
+            if self.cfg.random_scale_cfg.joint_pos:
+                for joint_name, noise_range in self.cfg.random_scale_cfg.joint_pos.items():
+                    joint_index = self.key_dof_names.index(joint_name)
+                    a, b = noise_range
+                    noise = (b - a) * torch.rand(len(env_ids), device=self.device) + a
+                    joint_pos[:, joint_index] += noise
+            if self.cfg.random_scale_cfg.joint_vel:
+                for joint_name, noise_range in self.cfg.random_scale_cfg.joint_vel.items():
+                    joint_index = self.key_dof_names.index(joint_name)
+                    a, b = noise_range
+                    noise = (b - a) * torch.rand(len(env_ids), device=self.device) + a
+                    joint_vel[:, joint_index] += noise
+
         self.robot.write_joint_state_to_sim(joint_pos, joint_vel, self.key_joint_indexes, env_ids) # type: ignore
 
         # Logging
@@ -315,6 +342,9 @@ class ActuatorDynamic2Env(DirectRLEnv):
     ) -> tuple[torch.Tensor, torch.Tensor]:
         # sample random motion times (or zeros if start is True)
         times = self._motion_loader.sample_times(self._motion_ids)
+        if start:
+            times = torch.zeros_like(times)
+
         # sample random motions
         (
             dof_positions,

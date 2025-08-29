@@ -32,26 +32,26 @@ LEGACTUATORDYNAMIC_2_CFG = ArticulationCfg(
     ),
     soft_joint_pos_limit_factor=0.97,
     actuators={
-        "left_leg": IdealPDActuatorCfg(
+        "left_leg": ImplicitActuatorCfg(
             joint_names_expr=["L_hip2_joint", "L_hip_joint", "L_thigh_joint", "L_calf_joint", "L_toe_joint"],
             effort_limit=300.0,
             velocity_limit=50.0,
             stiffness={
-                "L_hip_joint": 50.0,
-                "L_hip2_joint": 70.0,
-                "L_thigh_joint": 270.0,
-                "L_calf_joint": 120.0,
+                "L_hip_joint": 200.0,
+                "L_hip2_joint": 350.0,
+                "L_thigh_joint": 350.0,
+                "L_calf_joint": 200.0,
                 "L_toe_joint": 50.0,
             },
             damping={
-                "L_hip_joint": 3.0,
-                "L_hip2_joint": 4.0,
-                "L_thigh_joint": 4.0,
-                "L_calf_joint": 1.0,
-                "L_toe_joint": 1.0,
+                "L_hip_joint": 5.0,
+                "L_hip2_joint": 5.0,
+                "L_thigh_joint": 5.0,
+                "L_calf_joint": 5.0,
+                "L_toe_joint": 5.0,
             },
         ),
-        "right_leg": IdealPDActuatorCfg(
+        "right_leg": ImplicitActuatorCfg(
             joint_names_expr=["R_hip2_joint", "R_hip_joint", "R_thigh_joint", "R_calf_joint", "R_toe_joint"],
             effort_limit=300.0,
             velocity_limit=50.0,

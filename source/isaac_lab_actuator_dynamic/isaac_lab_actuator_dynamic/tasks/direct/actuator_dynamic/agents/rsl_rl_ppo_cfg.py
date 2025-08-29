@@ -10,13 +10,13 @@ from isaaclab_rl.rsl_rl import RslRlOnPolicyRunnerCfg, RslRlPpoActorCriticCfg, R
 
 @configclass
 class ActuatorDynamicPPORunnerCfg(RslRlOnPolicyRunnerCfg):
-    num_steps_per_env = 32
+    num_steps_per_env = 28
     max_iterations = 10000
     save_interval = 50
     experiment_name = "actuator_dynamic"
     empirical_normalization = False
     policy = RslRlPpoActorCriticCfg(
-        init_noise_std=0.5,
+        init_noise_std=0.3,
         actor_hidden_dims=[256, 256, 256],
         critic_hidden_dims=[256, 256, 256],
         activation="elu",
@@ -35,5 +35,10 @@ class ActuatorDynamicPPORunnerCfg(RslRlOnPolicyRunnerCfg):
         desired_kl=0.01,
         max_grad_norm=1.0,
     )
+
+    # resume = True
+    # load_run = "2025-08-29_17-04-59"
+    # load_checkpoint = "model_600.pt"
+    
 
 
