@@ -11,7 +11,7 @@ from isaaclab_rl.rsl_rl import RslRlOnPolicyRunnerCfg, RslRlPpoActorCriticCfg, R
 @configclass
 class ActuatorDynamicPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     num_steps_per_env = 28
-    max_iterations = 10000
+    max_iterations = 100000
     save_interval = 50
     experiment_name = "actuator_dynamic"
     empirical_normalization = False
@@ -37,8 +37,8 @@ class ActuatorDynamicPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     )
 
     # resume = True
-    # load_run = "2025-08-29_17-04-59"
-    # load_checkpoint = "model_600.pt"
+    # load_run = "2025-08-30_14-45-05"
+    # load_checkpoint = "model_2150.pt"
     
 
 

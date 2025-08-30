@@ -232,14 +232,27 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
                 plt.legend()
                 plt.grid()
 
-            time_data = np.arange(residual_torque_data.shape[0]) * dt
-            for i in range(residual_torque_data.shape[1]):
+            # time_data = np.arange(residual_torque_data.shape[0]) * dt
+            # for i in range(residual_torque_data.shape[1]):
+            #     plt.figure()
+            #     plt.plot(time_data, residual_torque_data[:, i], label='Residual Torque')
+            #     plt.plot(time_data, applied_torque_data[:, i], label='Applied Torque', linestyle='--')
+            #     plt.xlabel('Time (s)')
+            #     plt.ylabel('Torque (Nm)')
+            #     plt.title(f'Joint {i} Residual vs Applied Torque')
+            #     plt.legend()
+            #     plt.grid()
+            # plt.show()
+            
+            # plot error
+            error_data = joint_cmd_data - joint_data
+            error_data = np.degrees(error_data) #convert to degrees
+            for i in range(error_data.shape[1]):
                 plt.figure()
-                plt.plot(time_data, residual_torque_data[:, i], label='Residual Torque')
-                plt.plot(time_data, applied_torque_data[:, i], label='Applied Torque', linestyle='--')
+                plt.plot(time_data, error_data[:, i], label='Position Error', color='red')
                 plt.xlabel('Time (s)')
-                plt.ylabel('Torque (Nm)')
-                plt.title(f'Joint {i} Residual vs Applied Torque')
+                plt.ylabel('Error (degrees)')
+                plt.title(f'Joint {i} Position Error')
                 plt.legend()
                 plt.grid()
             plt.show()

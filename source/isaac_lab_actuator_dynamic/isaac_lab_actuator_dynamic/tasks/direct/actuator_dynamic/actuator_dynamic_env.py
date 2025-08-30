@@ -31,7 +31,7 @@ class ActuatorDynamic2Env(DirectRLEnv):
         self.actions = torch.zeros(self.num_envs, self.cfg.action_space, device=self.device)
         self.joint_pos_cmds = torch.zeros(self.num_envs, self.cfg.action_space, device=self.device)
         self.previous_actions = torch.zeros(
-            self.num_envs, self.cfg.action_space, device=self.device
+            self.num_envs, 2, self.cfg.action_space, device=self.device
         )
         self.residual_torques = torch.zeros_like(self.actions)
 
@@ -40,8 +40,10 @@ class ActuatorDynamic2Env(DirectRLEnv):
             key: torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
             for key in [
                 "dof_torques_l2",
+                "dof_vel_l2",
                 "dof_acc_l2",
                 "action_rate_l2",
+                "action_acc_l2",
                 "is_terminated",
                 "alive",
                 "joint_pos_mimic",
@@ -56,13 +58,10 @@ class ActuatorDynamic2Env(DirectRLEnv):
         self._motion_ids = torch.multinomial(motion_probs, self.num_envs, replacement=True)
 
         # DOF and key body indexes
-        #! Need to be changed
-        self.key_dof_names = ["L_hip_joint", "L_hip2_joint", "L_thigh_joint", "L_calf_joint", "L_toe_joint"]
-        key_body_names = ["L_hip2", "L_thigh", "L_calf", "L_toe"]
-        self.key_joint_indexes = self.robot.find_joints(self.key_dof_names)[0]
+        self.key_joint_indexes = self.robot.find_joints(self.cfg.key_dof_names)[0]
         self.ref_body_index = self.robot.data.body_names.index('base')
-        self.key_body_indexes = [self.robot.data.body_names.index(name) for name in key_body_names]
-        self.motion_dof_indexes = self._motion_loader.get_dof_index(self.key_dof_names)
+        self.key_body_indexes = [self.robot.data.body_names.index(name) for name in self.cfg.key_body_names]
+        self.motion_dof_indexes = self._motion_loader.get_dof_index(self.cfg.key_dof_names)
 
     def step(self, action: torch.Tensor) -> VecEnvStepReturn:
         """Execute one time-step of the environment's dynamics.
@@ -197,7 +196,8 @@ class ActuatorDynamic2Env(DirectRLEnv):
         self.robot.set_joint_position_target(self.joint_pos_cmds, self.key_joint_indexes)
 
     def _get_observations(self) -> dict:
-        self.previous_actions = self.actions.clone()
+        self.previous_actions[:, 1, :] = self.previous_actions[:, 0, :].clone()
+        self.previous_actions[:, 0, :] = self.actions.clone()
 
         # build task observation
         obs = torch.cat(
@@ -205,7 +205,8 @@ class ActuatorDynamic2Env(DirectRLEnv):
                 self.joint_pos_cmds,
                 self.robot.data.joint_pos[:, self.key_joint_indexes],
                 self.robot.data.joint_vel[:, self.key_joint_indexes],
-                self.previous_actions,
+                self.robot.data.joint_acc[:, self.key_joint_indexes],
+                self.previous_actions.reshape(self.num_envs, -1),
             ),
             dim=-1,
         )
@@ -216,19 +217,25 @@ class ActuatorDynamic2Env(DirectRLEnv):
         # joint torques
         joint_torques = torch.sum(torch.square(self.robot.data.applied_torque[:, self.key_joint_indexes]), dim=1)
 
+        # joint velocities
+        joint_vel = torch.sum(torch.square(self.robot.data.joint_vel[:, self.key_joint_indexes]), dim=1)
+
         # joint acceleration
         joint_accel = torch.sum(torch.square(self.robot.data.joint_acc[:, self.key_joint_indexes]), dim=1)
 
         # action rate
-        action_rate = torch.sum(torch.square(self.actions - self.previous_actions), dim=1)
+        action_rate = torch.sum(torch.square(self.actions - self.previous_actions[:, 0, :]), dim=1)
+
+        # action acceleration
+        action_acc = torch.sum(torch.square(self.actions - 2 * self.previous_actions[:, 0, :] + self.previous_actions[:, 1, :]), dim=1)
 
         # reference motions
         joint_pos_error = torch.sum(torch.square(self.robot.data.joint_pos[:, self.key_joint_indexes] - self.recorded_joint_pos), dim=1)
-        # joint_pos_mimic = torch.exp(-joint_pos_error / 0.5)
+        # joint_pos_mimic = torch.exp(-joint_pos_error / 0.25)
         joint_pos_mimic = (
-            - 15.0 * joint_pos_error
-            + 1.0 / (torch.exp(-10 * joint_pos_error) + torch.exp(10 * joint_pos_error) + 1e-6)
-            + 1.0 / (torch.exp(-700 * joint_pos_error) + torch.exp(700 * joint_pos_error) + 1e-6)
+            # - 1.0 * joint_pos_error
+            + 1.0 / (torch.exp(-50 * joint_pos_error) + torch.exp(50 * joint_pos_error) + 1e-6)
+            + 1.0 / (torch.exp(-300 * joint_pos_error) + torch.exp(300 * joint_pos_error) + 1e-6)
         )
         joint_pos_error_mean = torch.mean(torch.abs(self.robot.data.joint_pos[:, self.key_joint_indexes] - self.recorded_joint_pos), dim=1)
         position_bonus = joint_pos_error_mean < 1e-3
@@ -239,8 +246,10 @@ class ActuatorDynamic2Env(DirectRLEnv):
 
         rewards = {
             "dof_torques_l2": joint_torques * self.cfg.joint_torque_reward_scale * self.step_dt,
+            "dof_vel_l2": joint_vel * self.cfg.joint_vel_reward_scale * self.step_dt,
             "dof_acc_l2": joint_accel * self.cfg.joint_accel_reward_scale * self.step_dt,
             "action_rate_l2": action_rate * self.cfg.action_rate_reward_scale * self.step_dt,
+            "action_acc_l2": action_acc * self.cfg.action_acc_reward_scale * self.step_dt,
             "is_terminated": self.reset_terminated.float() * self.cfg.terminated_scale * self.step_dt,
             "alive": (1.0 - self.reset_terminated.float()) * self.cfg.alive_scale * self.step_dt,
             "joint_pos_mimic": joint_pos_mimic * self.cfg.joint_pos_mimic_reward_scale * self.step_dt,
@@ -292,6 +301,10 @@ class ActuatorDynamic2Env(DirectRLEnv):
         self.robot.reset(env_ids) # type: ignore
         super()._reset_idx(env_ids) # type: ignore
 
+        # reset previous action buffer
+        self.previous_actions[env_ids] = 0.0
+
+        # get new motion
         if self.cfg.reset_strategy == "default":
             joint_pos, joint_vel = self._reset_strategy_default(env_ids)
         elif self.cfg.reset_strategy.startswith("random"):
@@ -304,13 +317,13 @@ class ActuatorDynamic2Env(DirectRLEnv):
         if self.cfg.randomize_initial_state:
             if self.cfg.random_scale_cfg.joint_pos:
                 for joint_name, noise_range in self.cfg.random_scale_cfg.joint_pos.items():
-                    joint_index = self.key_dof_names.index(joint_name)
+                    joint_index = self.cfg.key_dof_names.index(joint_name)
                     a, b = noise_range
                     noise = (b - a) * torch.rand(len(env_ids), device=self.device) + a
                     joint_pos[:, joint_index] += noise
             if self.cfg.random_scale_cfg.joint_vel:
                 for joint_name, noise_range in self.cfg.random_scale_cfg.joint_vel.items():
-                    joint_index = self.key_dof_names.index(joint_name)
+                    joint_index = self.cfg.key_dof_names.index(joint_name)
                     a, b = noise_range
                     noise = (b - a) * torch.rand(len(env_ids), device=self.device) + a
                     joint_vel[:, joint_index] += noise
@@ -353,8 +366,8 @@ class ActuatorDynamic2Env(DirectRLEnv):
         ) = self._motion_loader.sample(self._motion_ids, motion_times=times)
 
         # get DOFs state
-        dof_pos = dof_positions[env_ids][:, self.motion_dof_indexes]
-        dof_vel = dof_velocities[env_ids][:, self.motion_dof_indexes]
+        dof_pos = dof_positions[env_ids]
+        dof_vel = dof_velocities[env_ids]
 
         return dof_pos, dof_vel
 

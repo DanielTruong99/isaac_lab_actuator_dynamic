@@ -41,17 +41,20 @@ class ActuatorDynamic2EnvCfg(DirectRLEnvCfg):
     """Actuator Dynamic AMP environment config (base class)."""
 
     # rewards
-    joint_torque_reward_scale = -2.5e-6
-    joint_accel_reward_scale = 0.0
-    action_rate_reward_scale = -1e-3
-    terminated_scale = -10.0
+    joint_torque_reward_scale = -0.5e-5
+    joint_vel_reward_scale = -0.5e-3
+    joint_accel_reward_scale = -0.5e-4
+    action_rate_reward_scale = -0.5e-3
+    action_acc_reward_scale = -0.5e-3
+    terminated_scale = -100.0
+
     alive_scale = 1.0
     joint_pos_mimic_reward_scale = 5.0
     joint_vel_mimic_reward_scale = 3.0
-    joint_pos_bonus_reward_scale = 10.0
+    joint_pos_bonus_reward_scale = 100.0
 
     # env
-    episode_length_s = 30.0
+    episode_length_s = 10.0
     decimation = 1
 
     # spaces
@@ -61,6 +64,10 @@ class ActuatorDynamic2EnvCfg(DirectRLEnvCfg):
 
     early_termination = True
     termination_height = 0.5
+
+    # reference motion
+    key_dof_names = ["L_hip_joint", "L_hip2_joint", "L_thigh_joint", "L_calf_joint", "L_toe_joint"]
+    key_body_names = ["L_hip2", "L_thigh", "L_calf", "L_toe"]
 
     motion_file: str = [
         # os.path.join(MOTIONS_DIR, "recorded_real_motor_data_1.npz"),
@@ -103,7 +110,7 @@ class ActuatorDynamic2PlayEnvCfg(ActuatorDynamic2EnvCfg):
         super().__post_init__()
 
         self.reset_strategy = "random-start"
-        
-
-        self.motion_file = [os.path.join(MOTIONS_DIR, "recorded_real_motor_data_2.npz")]
+        self.randomize_initial_state = False
+        self.episode_length_s = 30
+        self.motion_file = [os.path.join(MOTIONS_DIR, "recorded_real_motor_data_1.npz")]
 

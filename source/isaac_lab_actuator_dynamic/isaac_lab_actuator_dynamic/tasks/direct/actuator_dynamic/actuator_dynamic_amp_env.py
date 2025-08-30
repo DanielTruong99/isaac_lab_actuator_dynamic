@@ -26,7 +26,7 @@ class ActuatorDynamicEnv(DirectRLEnv):
         super().__init__(cfg, render_mode, **kwargs)
 
         self.action_offset = 0.0
-        self.action_scale = 1.0
+        self.action_scale = 0.1
 
         self.actions = torch.zeros(self.num_envs, self.cfg.action_space, device=self.device)
         self.previous_actions = torch.zeros(
