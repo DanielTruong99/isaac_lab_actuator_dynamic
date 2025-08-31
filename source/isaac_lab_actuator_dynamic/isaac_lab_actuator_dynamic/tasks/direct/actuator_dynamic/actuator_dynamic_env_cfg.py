@@ -24,7 +24,7 @@ class RandomScaleCfg:
     joint_pos = {
         'L_hip_joint': [-0.1, 0.1],
         'L_hip2_joint': [-0.1, 0.1],
-        'L_thigh_joint': [-0.3, 0.3],
+        'L_thigh_joint': [-0.1, 0.1],
         'L_calf_joint': [-0.1, 0.0],
         'L_toe_joint': [-0.1, 0.1],
     }
@@ -43,9 +43,9 @@ class ActuatorDynamic2EnvCfg(DirectRLEnvCfg):
     # rewards
     joint_torque_reward_scale = -0.5e-5
     joint_vel_reward_scale = -0.5e-3
-    joint_accel_reward_scale = -0.5e-4
-    action_rate_reward_scale = -0.5e-3
-    action_acc_reward_scale = -0.5e-3
+    joint_accel_reward_scale = -0.5e-6
+    action_rate_reward_scale = -0.5e-4
+    action_acc_reward_scale = -0.5e-6
     terminated_scale = -100.0
 
     alive_scale = 1.0
@@ -70,7 +70,7 @@ class ActuatorDynamic2EnvCfg(DirectRLEnvCfg):
     key_body_names = ["L_hip2", "L_thigh", "L_calf", "L_toe"]
 
     motion_file: str = [
-        # os.path.join(MOTIONS_DIR, "recorded_real_motor_data_1.npz"),
+        os.path.join(MOTIONS_DIR, "recorded_real_motor_data_1.npz"),
         os.path.join(MOTIONS_DIR, "recorded_real_motor_data_2.npz"),
     ]
     # motion_file: str = os.path.join(MOTIONS_DIR, "ik_trajectory_data.npz")
@@ -112,5 +112,5 @@ class ActuatorDynamic2PlayEnvCfg(ActuatorDynamic2EnvCfg):
         self.reset_strategy = "random-start"
         self.randomize_initial_state = False
         self.episode_length_s = 30
-        self.motion_file = [os.path.join(MOTIONS_DIR, "recorded_real_motor_data_1.npz")]
+        self.motion_file = [os.path.join(MOTIONS_DIR, "recorded_real_motor_data_2.npz")]
 

@@ -221,7 +221,7 @@ class MotionLoader:
         return (
             self._interpolate(self.dof_positions, blend=blend, start=index_0, end=index_1),
             self._interpolate(self.dof_velocities, blend=blend, start=index_0, end=index_1),
-            self._interpolate(self.dof_efforts, blend=blend, start=index_0, end=index_1),
+            self._interpolate(self.dof_position_commands, blend=blend, start=index_0, end=index_1),
         )
 
     def get_dof_index(self, dof_names: list[str]) -> list[int]:

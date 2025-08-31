@@ -26,10 +26,12 @@ class ActuatorDynamic2Env(DirectRLEnv):
         super().__init__(cfg, render_mode, **kwargs)
 
         self.action_offset = 0.0
-        self.action_scale = 1.0
+        self.action_scale = [1, 1, 1, 1, 1]
+        self.action_scale = torch.tensor(self.action_scale, device=self.device, dtype=torch.float32).unsqueeze(0)
 
         self.actions = torch.zeros(self.num_envs, self.cfg.action_space, device=self.device)
         self.joint_pos_cmds = torch.zeros(self.num_envs, self.cfg.action_space, device=self.device)
+        self.recorded_joint_pos = torch.zeros(self.num_envs, self.cfg.action_space, device=self.device)
         self.previous_actions = torch.zeros(
             self.num_envs, 2, self.cfg.action_space, device=self.device
         )
@@ -58,6 +60,12 @@ class ActuatorDynamic2Env(DirectRLEnv):
         self._motion_ids = torch.multinomial(motion_probs, self.num_envs, replacement=True)
 
         # DOF and key body indexes
+        R_dof_names = ['R_hip2_joint', 'R_hip_joint', 'R_thigh_joint', 'R_calf_joint', 'R_toe_joint']
+        self.default_r_joints = torch.zeros_like(self.actions)
+        self.default_r_joints[:, 2] = 0.77
+        self.default_r_joints[:, 3] = -1.54
+        self.default_r_joints[:, 4] = 0.6
+        self.r_joint_ids = self.robot.find_joints(R_dof_names)[0]
         self.key_joint_indexes = self.robot.find_joints(self.cfg.key_dof_names)[0]
         self.ref_body_index = self.robot.data.body_names.index('base')
         self.key_body_indexes = [self.robot.data.body_names.index(name) for name in self.cfg.key_body_names]
@@ -157,7 +165,7 @@ class ActuatorDynamic2Env(DirectRLEnv):
         
         # resample reference motions for used to compute observations, rewards, ...
         times = self.episode_length_buf * self._motion_loader.dt[self._motion_ids]
-        self.recorded_joint_pos, self.recorded_joint_vels, self.recorded_torques = self._motion_loader.sample(self._motion_ids, motion_times=times)
+        self.recorded_joint_pos, self.recorded_joint_vels, self.recorded_joint_pos_cmds = self._motion_loader.sample(self._motion_ids, motion_times=times)
 
     def _setup_scene(self):
         # add robot
@@ -181,7 +189,7 @@ class ActuatorDynamic2Env(DirectRLEnv):
         
         # get joint position cmds
         times = self.episode_length_buf * self._motion_loader.dt[self._motion_ids]
-        self.joint_pos_cmds, _, _, = self._motion_loader.sample(self._motion_ids, times)
+        _, _, self.joint_pos_cmds = self._motion_loader.sample(self._motion_ids, times)
 
     def _apply_action(self):
         """
@@ -194,6 +202,7 @@ class ActuatorDynamic2Env(DirectRLEnv):
 
         # get joint positions cmds from motion loader to feed into this one
         self.robot.set_joint_position_target(self.joint_pos_cmds, self.key_joint_indexes)
+        # self.robot.set_joint_position_target(self.default_r_joints, self.r_joint_ids)
 
     def _get_observations(self) -> dict:
         self.previous_actions[:, 1, :] = self.previous_actions[:, 0, :].clone()
@@ -205,7 +214,7 @@ class ActuatorDynamic2Env(DirectRLEnv):
                 self.joint_pos_cmds,
                 self.robot.data.joint_pos[:, self.key_joint_indexes],
                 self.robot.data.joint_vel[:, self.key_joint_indexes],
-                self.robot.data.joint_acc[:, self.key_joint_indexes],
+                self.robot.data.joint_acc[:, self.key_joint_indexes]* 0.01,
                 self.previous_actions.reshape(self.num_envs, -1),
             ),
             dim=-1,

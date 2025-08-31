@@ -176,12 +176,12 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     # reset environment
     obs, _ = env.get_observations()
     joint_data = []
-    joint_cmd_data = []
+    joint_pos_recorded_data = []
     joint_key_ids = env.unwrapped.key_joint_indexes
     joint_position = env.unwrapped.robot.data.joint_pos[:, joint_key_ids].cpu().numpy().tolist()
     joint_data += joint_position
-    joint_cmd = env.unwrapped.joint_pos_cmds.cpu().numpy().tolist()
-    joint_cmd_data += joint_cmd
+    joint_pos_recorded = env.unwrapped.recorded_joint_pos.cpu().numpy().tolist()
+    joint_pos_recorded_data += joint_pos_recorded
     timestep = 0
 
     residual_torque_data = []
@@ -203,8 +203,8 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         joint_data += joint_position
 
         # get joint commands
-        joint_pos_cmd = env.unwrapped.joint_pos_cmds.cpu().numpy().tolist()
-        joint_cmd_data += joint_pos_cmd
+        joint_pos_recorded = env.unwrapped.recorded_joint_pos.cpu().numpy().tolist()
+        joint_pos_recorded_data += joint_pos_recorded
 
         # get residual torques
         residual_torques = env.unwrapped.residual_torques.cpu().numpy().tolist()
@@ -218,14 +218,14 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
             print("[INFO] Episode done, resetting the environment...")
             # plot the  joint positions
             joint_data = np.array(joint_data)
-            joint_cmd_data = np.array(joint_cmd_data)
+            joint_pos_recorded_data = np.array(joint_pos_recorded_data)
             residual_torque_data = np.array(residual_torque_data)
             applied_torque_data = np.array(applied_torque_data)
             time_data = np.arange(joint_data.shape[0]) * dt
             for i in range(joint_data.shape[1]):
                 plt.figure()
                 plt.plot(time_data, joint_data[:, i], label='Joint Position')
-                plt.plot(time_data, joint_cmd_data[:, i], label='Joint Command', linestyle='--')
+                plt.plot(time_data, joint_pos_recorded_data[:, i], label='Joint Command', linestyle='--')
                 plt.xlabel('Time (s)')
                 plt.ylabel('Position (rad)')
                 plt.title(f'Joint {i} Position vs Command')
@@ -245,7 +245,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
             # plt.show()
             
             # plot error
-            error_data = joint_cmd_data - joint_data
+            error_data = joint_pos_recorded_data - joint_data
             error_data = np.degrees(error_data) #convert to degrees
             for i in range(error_data.shape[1]):
                 plt.figure()
@@ -256,6 +256,14 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
                 plt.legend()
                 plt.grid()
             plt.show()
+
+            # print statistic of the error
+            print("Position Error Statistics (degrees):")
+            print(f"Mean: {np.mean(np.abs(error_data[ 10: -10 , :]), axis=0)}")
+            print(f"Max: {np.max(np.abs(error_data[ 10: -10 , :]), axis=0)}")
+            print(f"Min: {np.min(np.abs(error_data[ 10: -10 , :]), axis=0)}")
+            print(f"Std: {np.std(np.abs(error_data[ 10: -10 , :]), axis=0)}")
+            print(f"RMS: {np.sqrt(np.mean(np.abs(error_data[ 10: -10 , :])**2, axis=0))}")
 
             joint_data = []
             joint_cmd_data = []
