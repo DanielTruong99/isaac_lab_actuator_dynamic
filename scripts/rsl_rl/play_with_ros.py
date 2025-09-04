@@ -222,6 +222,11 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
             residual_torque_data = np.array(residual_torque_data)
             applied_torque_data = np.array(applied_torque_data)
             time_data = np.arange(joint_data.shape[0]) * dt
+            
+            joint_data = joint_data[(time_data > 0) & (time_data < 11), :]
+            joint_pos_recorded_data = joint_pos_recorded_data[(time_data > 0) & (time_data < 11), :]
+            time_data = time_data[(time_data > 0) & (time_data < 11)]
+            # residual_torque_data = residual_torque_data
             for i in range(joint_data.shape[1]):
                 plt.figure()
                 plt.plot(time_data, joint_data[:, i], label='Joint Position')
@@ -232,6 +237,8 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
                 plt.legend()
                 plt.grid()
 
+            # save to npz file, joint_data, joint_pos_recorded_data
+            np.savez(os.path.join(log_dir, "play_data_without.npz"), joint_data=joint_data, joint_cmd_data=joint_pos_recorded_data, time_data=time_data)
             # time_data = np.arange(residual_torque_data.shape[0]) * dt
             # for i in range(residual_torque_data.shape[1]):
             #     plt.figure()

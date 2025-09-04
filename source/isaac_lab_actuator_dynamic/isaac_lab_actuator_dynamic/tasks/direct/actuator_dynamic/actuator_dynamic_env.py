@@ -26,7 +26,7 @@ class ActuatorDynamic2Env(DirectRLEnv):
         super().__init__(cfg, render_mode, **kwargs)
 
         self.action_offset = 0.0
-        self.action_scale = [1, 1, 1, 1, 1]
+        self.action_scale = [0, 0, 0, 0, 0]
         self.action_scale = torch.tensor(self.action_scale, device=self.device, dtype=torch.float32).unsqueeze(0)
 
         self.actions = torch.zeros(self.num_envs, self.cfg.action_space, device=self.device)
