@@ -203,12 +203,12 @@ def plot_comparison(result_df: pd.DataFrame, joint_name: str):
 
 def main():
     # Load data
-    csv_path = "data_analysis/joint_state_latest_3.csv"
+    csv_path = "data_analysis/joint_state_0905_rlpolicy.csv"
     print(f"Loading data from {csv_path}...")
     data_frame = _load_and_validate(csv_path)
     
     # Analyze all left joints with their respective gains
-    joint_name = 'L_thigh_joint'  # Start with one joint, you can change this
+    joint_name = 'L_hip_joint'  # Start with one joint, you can change this
     
     print(f"\nAnalyzing joint: {joint_name}")
     result_df = analyze_joint(data_frame, joint_name)
