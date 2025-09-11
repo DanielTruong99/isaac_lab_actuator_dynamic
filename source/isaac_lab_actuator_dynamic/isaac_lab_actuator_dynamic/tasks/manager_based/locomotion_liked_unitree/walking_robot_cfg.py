@@ -23,7 +23,6 @@ from isaaclab.utils.noise import AdditiveUniformNoiseCfg
 # User defined configs
 ##
 from isaac_lab_actuator_dynamic.assets import LEGACTUATORDYNAMIC_CFG, LEGACTUATORDYNAMIC_2_CFG, LEGWALKING_CFG
-from leg_robot.assets import LEGPARKOUR_CFG
 from . import mdp as custom_mdp
 
 @configclass
@@ -182,7 +181,7 @@ class WalkingRobotRewardCfg(RewardsCfg):
     )
 
     feet_schedule_contact = RewardTermCfg(
-        func=custom_mdp.feet_schedule_contact,
+        func=custom_mdp.feet_schedule_contact_with_cmd,
         weight=1.0,
         params={"sensor_cfg": SceneEntityCfg(name="contact_forces", body_names=["L_toe", "R_toe"])},
     )
@@ -203,13 +202,13 @@ class WalkingRobotCommandsCfg:
     base_velocity = mdp.UniformVelocityCommandCfg(
         asset_name="robot",
         resampling_time_range=(5.0, 5.0),
-        rel_standing_envs=0.02,
+        rel_standing_envs=0.4,
         rel_heading_envs=1.0,
         heading_command=False,
         heading_control_stiffness=0.5,
         debug_vis=False,
         ranges=mdp.UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(-0.0, 4.5), lin_vel_y=(-0.3, 0.3), ang_vel_z=(-1.0, 1.0)
+            lin_vel_x=(-0.0, 1.5), lin_vel_y=(-0.3, 0.3), ang_vel_z=(-0.2, 0.2)
         ),
     )
 

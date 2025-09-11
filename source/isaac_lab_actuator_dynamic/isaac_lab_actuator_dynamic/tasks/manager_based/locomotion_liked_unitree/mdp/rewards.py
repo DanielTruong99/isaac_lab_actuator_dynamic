@@ -133,6 +133,42 @@ def feet_schedule_contact(env: WalkingRobotEnv, sensor_cfg: SceneEntityCfg) -> t
     result = result + ~(is_contact[:, 0] ^ (env.phase_left < 0.55)) + ~(is_contact[:, 1] ^ (env.phase_right < 0.55))
     return result
 
+def feet_schedule_contact_with_cmd(env: WalkingRobotEnv, sensor_cfg: SceneEntityCfg) -> torch.Tensor:
+    """
+    Computes the contact schedule for the feet of a walking robot.
+    norm > 0.1 |scheduler | is_contact | result
+    --------------------------------
+    1          | 0        | 0          | 1
+    1          | 0        | 1          | 0
+    1          | 1        | 0          | 0
+    1          | 1        | 1          | 1
+    0          | 0        | 0          | 0
+    0          | 0        | 1          | 1
+    0          | 1        | 0          | 0
+    0          | 1        | 1          | 1
+
+
+    Args:
+        env (WalkingRobotEnv): The environment containing the walking robot.
+        sensor_cfg (SceneEntityCfg): Configuration for the contact sensor.
+
+    Returns:
+        torch.Tensor: A tensor indicating the contact schedule for each environment.
+    """
+    v_cmd = env.command_manager.get_command("base_velocity")
+    is_vcmd_gt = torch.norm(v_cmd) > 0.1
+
+    result = torch.zeros(env.num_envs, device=env.device, dtype=torch.float32, requires_grad=False)
+    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name] # type: ignore
+    net_contact_forces = contact_sensor.data.net_forces_w_history
+
+    is_contact = torch.max(torch.norm(net_contact_forces[:, :, sensor_cfg.body_ids], dim=-1), dim=1)[0] > 1.0 # type: ignore
+
+    left_leg_result = (~(is_contact[:, 0] ^ (env.phase_left < 0.55))) * is_vcmd_gt + is_contact[:, 0] * (~is_vcmd_gt)
+    right_leg_result = (~(is_contact[:, 1] ^ (env.phase_right < 0.55))) * is_vcmd_gt + is_contact[:, 1] * (~is_vcmd_gt)
+    result = result + left_leg_result + right_leg_result
+    return result
+
 
 def feet_height(env, sensor_cfg: SceneEntityCfg, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
     """
