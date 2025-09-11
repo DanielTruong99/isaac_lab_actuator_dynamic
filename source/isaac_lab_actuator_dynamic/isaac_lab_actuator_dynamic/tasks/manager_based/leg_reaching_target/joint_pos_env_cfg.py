@@ -46,8 +46,12 @@ class CustomJointPositionAction(joint_actions.JointPositionAction):
 
     def apply_actions(self):
         # set position targets
-        self.filtered_actions = 0.85 * self.filtered_actions + (1 - 0.85) * self.processed_actions
+        self.filtered_actions = 0.999 * self.filtered_actions + (1 - 0.999) * self.processed_actions
         self._asset.set_joint_position_target(self.filtered_actions, joint_ids=self._joint_ids)
+
+    def reset(self, env_ids) -> None:
+        self._raw_actions[env_ids] = 0.0
+        self.filtered_actions[env_ids] = 0.0
 
 @configclass
 class ActionsPlayCfg:
@@ -117,12 +121,12 @@ class RewardsCfg:
     action_rate = RewTerm(func=mdp.action_rate_l2, weight=-5e-3)
     joint_vel = RewTerm(
         func=mdp.joint_vel_l2,
-        weight=-1e-3,
+        weight=-1e-1,
         params={"asset_cfg": SceneEntityCfg("robot")},
     )
     joint_torque = RewTerm(
         func=mdp.joint_torques_l2,
-        weight=-7e-5,
+        weight=-7e-7,
         params={"asset_cfg": SceneEntityCfg("robot")},
     )
     terminated = RewTerm(func=mdp.is_terminated, weight=-100.0)
@@ -251,4 +255,4 @@ class LeftLegReachEnvCfg_PLAY(LeftLegReachEnvCfg):
         self.commands.L_toe.debug_vis = True
 
         # change action to play version
-        # self.actions = ActionsPlayCfg()
+        self.actions = ActionsPlayCfg()

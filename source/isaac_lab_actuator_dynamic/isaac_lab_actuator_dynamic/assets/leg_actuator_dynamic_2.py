@@ -39,7 +39,7 @@ LEGACTUATORDYNAMIC_2_CFG = ArticulationCfg(
             stiffness={
                 "L_hip_joint": 50.0,
                 "L_hip2_joint": 70.0,
-                "L_thigh_joint": 270.0,
+                "L_thigh_joint": 350.0,
                 "L_calf_joint": 120.0,
                 "L_toe_joint": 50.0,
             },
