@@ -11,6 +11,12 @@ def get_phase(env: WalkingRobotEnv) -> torch.Tensor:
     cos_phase = torch.cos(2 * np.pi * env.phase ).unsqueeze(1)
     return torch.cat([sin_phase, cos_phase], dim=-1)
 
+def contact_state(env: WalkingRobotEnv, sensor_cfg: SceneEntityCfg, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
+    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name] # type: ignore
+    net_contact_forces = contact_sensor.data.net_forces_w_history
+    is_contact = torch.max(torch.norm(net_contact_forces[:, :, sensor_cfg.body_ids], dim=-1), dim=1)[0] > 1.0 # type: ignore
+    return is_contact.float()
+
 def joint_torque(env: WalkingRobotEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
     asset: Articulation = env.scene[asset_cfg.name]
     return asset.data.applied_torque[:, asset_cfg.joint_ids]

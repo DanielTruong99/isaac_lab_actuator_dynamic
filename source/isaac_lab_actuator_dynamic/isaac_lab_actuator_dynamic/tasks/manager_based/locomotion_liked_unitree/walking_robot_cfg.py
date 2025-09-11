@@ -63,6 +63,13 @@ class WalkingRobotObservationsCfg(ObservationsCfg):
         joint_pos = ObservationTermCfg(func=mdp.joint_pos_rel, noise=AdditiveUniformNoiseCfg(n_min=-0.01, n_max=0.01))
         joint_vel = ObservationTermCfg(func=mdp.joint_vel_rel, noise=AdditiveUniformNoiseCfg(n_min=-1.5, n_max=1.5))
         actions = ObservationTermCfg(func=mdp.last_action)
+        contact_state = ObservationTermCfg(
+            func=custom_mdp.contact_state, 
+            params={
+                "sensor_cfg": SceneEntityCfg(name="contact_forces", body_names=["L_toe", "R_toe"]),
+                "asset_cfg": SceneEntityCfg("robot", body_names=["L_toe", "R_toe"]),
+            }
+        )
         phase = ObservationTermCfg(func=custom_mdp.get_phase)
 
         def __post_init__(self):
