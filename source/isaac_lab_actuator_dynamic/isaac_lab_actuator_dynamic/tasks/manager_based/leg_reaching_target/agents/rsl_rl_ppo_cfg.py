@@ -17,7 +17,7 @@ class LeftLegReachPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     run_name = ""
     empirical_normalization = False
     policy = RslRlPpoActorCriticCfg(
-        init_noise_std=1.0,
+        init_noise_std=0.12,
         actor_hidden_dims=[256, 256, 256],
         critic_hidden_dims=[256, 256, 256],
         activation="elu",
@@ -38,12 +38,12 @@ class LeftLegReachPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     )
 
     # resume = True
-    # load_run = "2025-09-05_02-05-15"
-    # load_checkpoint = "model_1600.pt"    
+    # load_run = "2025-09-05_02-42-31"
+    # load_checkpoint = "model_1350.pt"    
 
 @configclass
 class LeftLegReachPPORunnerPlayCfg(LeftLegReachPPORunnerCfg):
     resume = True
     load_run = "2025-09-05_02-42-31"
-    load_checkpoint = "model_1250.pt"
+    load_checkpoint = "model_1350.pt"
     # pass
