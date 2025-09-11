@@ -112,31 +112,33 @@ class WalkingRobotEventCfg(EventCfg):
             6. push robot
 
         '''
-        self.physics_material.params["dynamic_friction_range"] = [0.1, 1.25]
-        self.add_base_mass.params["mass_distribution_params"] = [-1.0, 3.0]
+        # self.physics_material.params["dynamic_friction_range"] = [0.1, 1.25]
+        self.physics_material = None
+        # self.add_base_mass.params["mass_distribution_params"] = [-1.0, 3.0]
+        self.add_base_mass = None
         self.push_robot.params = {
             "velocity_range": {
                 "x": [-1.5, 1.5],
                 "y": [-1.5, 1.5],
             }
         }
-        self.push_robot.interval_range_s = (5.0, 5.0)
+        self.push_robot.interval_range_s = (2.5, 2.5)
         self.base_external_force_torque = None 
         self.reset_base.params = {
             "pose_range": {"x": (0.0, 0.0), "y": (0.0, 0.0), "yaw": (0.0, 0.0)},
             "velocity_range": {
-            "x": (0.0, 0.0),
-            "y": (0.0, 0.0),
-            "z": (0.0, 0.0),
-            "roll": (0.0, 0.0),
-            "pitch": (0.0, 0.0),
-            "yaw": (0.0, 0.0),
+            "x": (-0.5, 0.5),
+            "y": (-0.5, 0.5),
+            "z": (-0.5, 0.5),
+            "roll": (-0.5, 0.5),
+            "pitch": (-0.5, 0.5),
+            "yaw": (-0.5, 0.5),
             },
         }
         self.reset_robot_joints.func = mdp.reset_joints_by_offset
         self.reset_robot_joints.params = {
             "position_range": (0.0, 0.0),
-            "velocity_range": (0.0, 0.0),
+            "velocity_range": (-0.1, 0.1),
         }
 
 @configclass
@@ -208,7 +210,7 @@ class WalkingRobotCommandsCfg:
         heading_control_stiffness=0.5,
         debug_vis=False,
         ranges=mdp.UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(-0.0, 1.5), lin_vel_y=(-0.3, 0.3), ang_vel_z=(-0.2, 0.2)
+            lin_vel_x=(-0.0, 4.5), lin_vel_y=(-0.3, 0.3), ang_vel_z=(-1.5, 1.5)
         ),
     )
 
@@ -224,6 +226,7 @@ class WalkingRobotEnvCfg(LocomotionVelocityRoughEnvCfg):
 
         ''' #!Terrain setup'''
         self.scene.terrain.terrain_generator = custom_mdp.TERRAINS_CFG
+        self.sim.episode_length_s = 5.0
 
         ''' #!Action setup
             The default action space setup includes:
