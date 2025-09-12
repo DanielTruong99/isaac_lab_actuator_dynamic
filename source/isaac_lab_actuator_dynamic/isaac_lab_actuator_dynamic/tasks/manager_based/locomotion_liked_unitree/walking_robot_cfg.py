@@ -89,7 +89,7 @@ class WalkingRobotObservationsCfg(ObservationsCfg):
     policy: PolicyCfg = PolicyCfg() 
     critic: CriticCfg = CriticCfg()
     #! Just for debugging
-    # debug: DebugCfg = DebugCfg()
+    debug: DebugCfg = DebugCfg()
     
 
 @configclass 
@@ -164,7 +164,7 @@ class WalkingRobotRewardCfg(RewardsCfg):
     base_height_l2 = RewardTermCfg(
         func=mdp.base_height_l2,
         weight=-0.5,
-        params={"target_height": 0.78},
+        params={"target_height": 0.76},
     )
 
     dof_vel = RewardTermCfg(
@@ -209,6 +209,11 @@ class WalkingRobotRewardCfg(RewardsCfg):
         params={
             "sensor_cfg": SceneEntityCfg(name="contact_forces", body_names=["L_toe", "R_toe"]),
         },
+    )
+
+    action_norm = RewardTermCfg(
+        func=mdp.action_l2,
+        weight=-0.04,
     )
 
 class CustomUniformVelocityCommand(mdp.UniformVelocityCommand):
@@ -314,6 +319,7 @@ class WalkingRobotEnvPLayCfg(WalkingRobotEnvCfg):
 
         # self.sim.use_fabric = False
         # self.sim.device = "cpu"
+        # self.actions.joint_pos.scale = {"R_toe_joint": 0.001}
 
  
 

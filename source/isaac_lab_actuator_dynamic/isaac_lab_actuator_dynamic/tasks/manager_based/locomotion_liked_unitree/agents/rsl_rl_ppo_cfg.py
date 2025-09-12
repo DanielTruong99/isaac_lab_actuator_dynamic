@@ -11,8 +11,8 @@ class WalkingRobotPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     empirical_normalization = False
 
     # resume = True
-    # load_checkpoint = "model_8650.pt"
-    # load_run = "2025-01-02_15-36-20"
+    # load_checkpoint = "model_48550.pt"
+    # load_run = "2025-09-12_02-28-39"
 
     policy = RslRlPpoActorCriticRecurrentCfg(
         init_noise_std = 0.8,
