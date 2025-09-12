@@ -4,8 +4,8 @@ from isaaclab_rl.rsl_rl import RslRlOnPolicyRunnerCfg, RslRlPpoActorCriticCfg, R
 
 @configclass
 class WalkingRobotPPORunnerCfg(RslRlOnPolicyRunnerCfg):
-    num_steps_per_env = 24
-    max_iterations = 30000
+    num_steps_per_env = 28
+    max_iterations = 100000
     save_interval = 50
     experiment_name = "walking_robot_unitree"   
     empirical_normalization = False
@@ -20,7 +20,7 @@ class WalkingRobotPPORunnerCfg(RslRlOnPolicyRunnerCfg):
         actor_hidden_dims = [128, 128, 128],
         critic_hidden_dims = [128, 128, 128],
         rnn_type = "gru",
-        rnn_hidden_size = 64,
+        rnn_hidden_dim = 64,
         rnn_num_layers = 1
     )
 

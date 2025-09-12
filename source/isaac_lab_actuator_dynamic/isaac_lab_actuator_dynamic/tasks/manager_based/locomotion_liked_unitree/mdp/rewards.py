@@ -156,7 +156,7 @@ def feet_schedule_contact_with_cmd(env: WalkingRobotEnv, sensor_cfg: SceneEntity
         torch.Tensor: A tensor indicating the contact schedule for each environment.
     """
     v_cmd = env.command_manager.get_command("base_velocity")
-    is_vcmd_gt = torch.norm(v_cmd) > 0.1
+    is_vcmd_gt = torch.norm(v_cmd, dim=-1) > 0.1
 
     result = torch.zeros(env.num_envs, device=env.device, dtype=torch.float32, requires_grad=False)
     contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name] # type: ignore
@@ -169,6 +169,32 @@ def feet_schedule_contact_with_cmd(env: WalkingRobotEnv, sensor_cfg: SceneEntity
     result = result + left_leg_result + right_leg_result
     return result
 
+def stand_still_contact(env: WalkingRobotEnv, sensor_cfg: SceneEntityCfg) -> torch.Tensor:
+    """
+    Calculate the stand still contact reward for a walking robot environment.
+
+    This function computes a reward based on whether the feet are in contact with the ground
+    when the commanded base velocity is below a certain threshold. If the commanded velocity
+    is low, the reward is given for having contact; otherwise, no reward is given.
+
+    Args:
+        env (WalkingRobotEnv): The walking robot environment instance.
+        sensor_cfg (SceneEntityCfg): The configuration for the contact sensor.
+
+    Returns:
+        torch.Tensor: A tensor indicating the stand still contact reward for each environment.
+    """
+
+    result = torch.zeros(env.num_envs, device=env.device, dtype=torch.float32, requires_grad=False)
+    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name] # type: ignore
+    net_contact_forces = contact_sensor.data.net_forces_w_history
+
+    is_contact = torch.max(torch.norm(net_contact_forces[:, :, sensor_cfg.body_ids], dim=-1), dim=1)[0] > 1.0 # type: ignore
+    v_cmd = env.command_manager.get_command("base_velocity")
+    is_vcmd_lt = torch.norm(v_cmd,dim=-1) < 0.1
+
+    result = result + (~is_contact[:, 0] * is_vcmd_lt) + (~is_contact[:, 1] * is_vcmd_lt)
+    return result
 
 def feet_height(env, sensor_cfg: SceneEntityCfg, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
     """
@@ -188,9 +214,12 @@ def feet_height(env, sensor_cfg: SceneEntityCfg, asset_cfg: SceneEntityCfg = Sce
     is_contact = contact_sensor.data.net_forces_w_history[:, :, sensor_cfg.body_ids, :].norm(dim=-1).max(dim=1)[0] > 1.0 # type: ignore
     asset = env.scene[asset_cfg.name]
 
+    v_cmd = env.command_manager.get_command("base_velocity")
+    is_vcmd_gt = torch.norm(v_cmd, dim=-1) > 0.1
+
     feet_pos_w = asset.data.body_pos_w[:, asset_cfg.body_ids]
     base_pos_w = asset.data.root_pos_w
     feet_height = feet_pos_w - base_pos_w.unsqueeze(1) 
 
-    result = ~is_contact * torch.square(feet_height[:, :, 2] - (-0.7405))
-    return torch.sum(result, dim=1)
+    result = (~is_contact) * torch.square(feet_height[:, :, 2] - (-0.7405))
+    return torch.sum(result, dim=1) * is_vcmd_gt

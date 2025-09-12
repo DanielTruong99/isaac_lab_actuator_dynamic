@@ -4,7 +4,7 @@ from isaaclab.actuators import ActuatorNetMLPCfg, DCMotorCfg, ImplicitActuatorCf
 from isaaclab.assets.articulation import ArticulationCfg
 from isaac_lab_actuator_dynamic.assets import LOCAL_ASSETS_DATA_DIR
 
-LEGACTUATORDYNAMIC_USD_PATH = f"/home/humanoid2/DanielTruong/isaac_lab_actuator_dynamic/source/isaac_lab_actuator_dynamic/isaac_lab_actuator_dynamic/assets/usd/leg05.usd"
+LEGACTUATORDYNAMIC_USD_PATH = f"/home/humanoid2/DanielTruong/isaac_lab_actuator_dynamic/source/isaac_lab_actuator_dynamic/isaac_lab_actuator_dynamic/assets/urdf/leg05/robot.usd"
 
 LEGWALKING_CFG = ArticulationCfg(
     spawn=sim_utils.UsdFileCfg(
@@ -20,13 +20,22 @@ LEGWALKING_CFG = ArticulationCfg(
             max_depenetration_velocity=10.0,
         ),
         articulation_props=sim_utils.ArticulationRootPropertiesCfg(
-            enabled_self_collisions=False, solver_position_iteration_count=8, solver_velocity_iteration_count=4,
+            enabled_self_collisions=True, solver_position_iteration_count=8, solver_velocity_iteration_count=4,
         ),
     ),
     init_state=ArticulationCfg.InitialStateCfg(
-        pos=(0.0, 0.0, 0.75),
+        pos=(0.0, 0.0, 0.85),
         joint_pos={
+            'L_hip_joint': 0.0, # limit -35, 35 (degrees)
             'L_hip2_joint': 0.0, # limit -35, 35 (degrees)
+            'L_thigh_joint': 0.51, # limit -70, 70 (degrees)
+            'L_calf_joint': -0.85, # limit -110, 0 (degrees)
+            'L_toe_joint': 0.6, # limit -45, 45 (degrees)
+            'R_hip_joint': 0.0, # limit -35, 35 (degrees)
+            'R_hip2_joint': 0.0, # limit -35, 35 (degrees)
+            'R_thigh_joint': 0.51, # limit -70, 70 (degrees)
+            'R_calf_joint': -0.85, # limit -110, 0 (degrees)
+            'R_toe_joint': 0.6, # limit -45, 45
         },
         joint_vel={".*": 0.0},
     ),
@@ -41,12 +50,20 @@ LEGWALKING_CFG = ArticulationCfg(
                 ".*_hip2_joint": 70.0,
                 ".*_thigh_joint": 350.0,
                 ".*_calf_joint": 120.0,
+                # ".*_hip_joint": 30.0,
+                # ".*_hip2_joint": 30.0,
+                # ".*_thigh_joint": 30.0,
+                # ".*_calf_joint": 30.0,
             },
             damping={
                 ".*_hip_joint": 3.0,
                 ".*_hip2_joint": 4.0,
                 ".*_thigh_joint": 4.0,
                 ".*_calf_joint": 1.0,
+                # ".*_hip_joint": 5.0,
+                # ".*_hip2_joint": 5.0,
+                # ".*_thigh_joint": 5.0,
+                # ".*_calf_joint": 5.0,
             },
         ),
         "feet": ImplicitActuatorCfg(

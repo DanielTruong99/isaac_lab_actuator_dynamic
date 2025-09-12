@@ -1,5 +1,6 @@
 import math
 import isaaclab_tasks.manager_based.locomotion.velocity.mdp as mdp
+import torch
 
 from isaaclab.actuators import ImplicitActuatorCfg
 from isaaclab_tasks.manager_based.locomotion.velocity.velocity_env_cfg import (
@@ -40,7 +41,7 @@ class WalkingRobotObservationsCfg(ObservationsCfg):
         )
         velocity_commands = ObservationTermCfg(func=mdp.generated_commands, params={"command_name": "base_velocity"})
         joint_pos = ObservationTermCfg(func=mdp.joint_pos_rel, noise=AdditiveUniformNoiseCfg(n_min=-0.01, n_max=0.01))
-        joint_vel = ObservationTermCfg(func=mdp.joint_vel_rel, noise=AdditiveUniformNoiseCfg(n_min=-1.5, n_max=1.5))
+        joint_vel = ObservationTermCfg(func=mdp.joint_vel_rel, scale=0.15, noise=AdditiveUniformNoiseCfg(n_min=-1.5, n_max=1.5))
         actions = ObservationTermCfg(func=mdp.last_action)
         phase = ObservationTermCfg(func=custom_mdp.get_phase)
 
@@ -60,7 +61,7 @@ class WalkingRobotObservationsCfg(ObservationsCfg):
         )
         velocity_commands = ObservationTermCfg(func=mdp.generated_commands, params={"command_name": "base_velocity"})
         joint_pos = ObservationTermCfg(func=mdp.joint_pos_rel, noise=AdditiveUniformNoiseCfg(n_min=-0.01, n_max=0.01))
-        joint_vel = ObservationTermCfg(func=mdp.joint_vel_rel, noise=AdditiveUniformNoiseCfg(n_min=-1.5, n_max=1.5))
+        joint_vel = ObservationTermCfg(func=mdp.joint_vel_rel, scale=0.15, noise=AdditiveUniformNoiseCfg(n_min=-1.5, n_max=1.5))
         actions = ObservationTermCfg(func=mdp.last_action)
         contact_state = ObservationTermCfg(
             func=custom_mdp.contact_state, 
@@ -137,8 +138,8 @@ class WalkingRobotEventCfg(EventCfg):
         }
         self.reset_robot_joints.func = mdp.reset_joints_by_offset
         self.reset_robot_joints.params = {
-            "position_range": (0.0, 0.0),
-            "velocity_range": (-0.1, 0.1),
+            "position_range": (-0.0, 0.0),
+            "velocity_range": (-0.0, 0.0),
         }
 
 @configclass
@@ -173,13 +174,18 @@ class WalkingRobotRewardCfg(RewardsCfg):
 
     joint_deviation_hip = RewardTermCfg(
         func=mdp.joint_deviation_l1,
-        weight=-0.1,
+        weight=-0.5,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_hip_joint", ".*_hip2_joint"])},
     )
 
     is_alive = RewardTermCfg(
         func=custom_mdp.weighted_is_alive,
         weight=0.15,
+    )
+
+    is_terminated = RewardTermCfg(
+        func=mdp.is_terminated,
+        weight=-100.0,
     )
 
     feet_schedule_contact = RewardTermCfg(
@@ -197,20 +203,42 @@ class WalkingRobotRewardCfg(RewardsCfg):
         },
     )
 
+    stand_still_contact = RewardTermCfg(
+        func=custom_mdp.stand_still_contact,
+        weight=-0.7,
+        params={
+            "sensor_cfg": SceneEntityCfg(name="contact_forces", body_names=["L_toe", "R_toe"]),
+        },
+    )
+
+class CustomUniformVelocityCommand(mdp.UniformVelocityCommand):
+    """Custom uniform velocity command generator configuration."""
+
+    def __init__(self, cfg, env):
+        super().__init__(cfg, env)
+
+        self.metrics["num_standing_envs"] = torch.zeros(self.num_envs, device=self.device)
+
+    def _update_metrics(self):
+        super()._update_metrics()
+        # -- metrics
+        self.metrics["num_standing_envs"] = self.is_standing_env.float()
+
 @configclass
 class WalkingRobotCommandsCfg:
     """Command specifications for the MDP."""
 
     base_velocity = mdp.UniformVelocityCommandCfg(
+        class_type=CustomUniformVelocityCommand,
         asset_name="robot",
         resampling_time_range=(5.0, 5.0),
-        rel_standing_envs=0.4,
+        rel_standing_envs=0.3,
         rel_heading_envs=1.0,
         heading_command=False,
         heading_control_stiffness=0.5,
         debug_vis=False,
         ranges=mdp.UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(-0.0, 4.5), lin_vel_y=(-0.3, 0.3), ang_vel_z=(-1.5, 1.5)
+            lin_vel_x=(-0.0, 1.5), lin_vel_y=(-0.3, 0.3), ang_vel_z=(-0.2, 0.2)
         ),
     )
 
@@ -225,7 +253,10 @@ class WalkingRobotEnvCfg(LocomotionVelocityRoughEnvCfg):
         super().__post_init__()
 
         ''' #!Terrain setup'''
-        self.scene.terrain.terrain_generator = custom_mdp.TERRAINS_CFG
+        # self.scene.terrain.terrain_generator = custom_mdp.TERRAINS_CFG
+        self.scene.terrain.terrain_type = "plane"
+        self.scene.terrain.terrain_generator.curriculum = False #type: ignore
+        self.curriculum.terrain_levels = None
         self.sim.episode_length_s = 5.0
 
         ''' #!Action setup
@@ -238,6 +269,8 @@ class WalkingRobotEnvCfg(LocomotionVelocityRoughEnvCfg):
         self.scene.robot = LEGWALKING_CFG.replace(prim_path="/World/envs/env_.*/Robot") #type: ignore 
         # self.scene.height_scanner = None #type: ignore
 
+        # self.sim.dt = 0.001
+        # self.decimation = 10
         step_dt = self.sim.dt * self.decimation
         self.events.update_phase.interval_range_s = (step_dt, step_dt)
 
@@ -251,10 +284,11 @@ class WalkingRobotEnvCfg(LocomotionVelocityRoughEnvCfg):
         ''' #!Reward setup'''
         self.rewards.track_lin_vel_xy_exp.weight = 3.0
         self.rewards.track_ang_vel_z_exp.weight = 2.5
-        self.rewards.dof_pos_limits.weight = -5.0
+        self.rewards.dof_pos_limits.weight = -1.5
         self.rewards.flat_orientation_l2.weight = -1.0
         self.rewards.feet_air_time = None #type: ignore
         self.rewards.undesired_contacts = None #type: ignore
+        # self.rewards.feet_height = None #type: ignore
 
 @configclass
 class WalkingRobotEnvPLayCfg(WalkingRobotEnvCfg):
@@ -266,6 +300,8 @@ class WalkingRobotEnvPLayCfg(WalkingRobotEnvCfg):
         self.events.add_base_mass = None #type: ignore
         self.events.base_external_force_torque = None
         self.events.push_robot = None #type: ignore
+        self.events.reset_base = None #type: ignore
+        self.events.reset_robot_joints = None #type: ignore
 
         self.scene.terrain.terrain_type = "plane"
         self.scene.terrain.terrain_generator.curriculum = False #type: ignore

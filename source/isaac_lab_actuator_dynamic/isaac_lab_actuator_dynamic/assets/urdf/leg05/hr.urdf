@@ -189,15 +189,14 @@
           rgba="0.79216 0.81961 0.93333 1" />
       </material>
     </visual>
-    <!-- <collision>
+    <collision>
       <origin
-        xyz="0 0 0"
+        xyz="0 0.0141 -0.175"
         rpy="0 0 0" />
-      <geometry>
-        <mesh
-          filename="meshes/L_thigh.STL" />
+      <geometry>                                  
+          <cylinder radius="0.04" length="0.30"/>
       </geometry>
-    </collision> -->
+    </collision>
   </link>
   <joint
     name="L_thigh_joint"
@@ -213,7 +212,7 @@
       xyz="0 1 0" />
     <limit
       lower="-1.26"
-      upper="0.78"
+      upper="0.8"
       effort="300"
       velocity="50" />
   </joint>
@@ -247,15 +246,14 @@
           rgba="0.79216 0.81961 0.93333 1" />
       </material>
     </visual>
-    <!-- <collision>
+    <collision>
       <origin
-        xyz="0 0 0"
+        xyz="0 0.0141 -0.175"
         rpy="0 0 0" />
-      <geometry>
-        <mesh
-          filename="meshes/L_calf.STL" />
+      <geometry>                                  
+          <cylinder radius="0.04" length="0.27"/>
       </geometry>
-    </collision> -->
+    </collision>
   </link>
   <joint
     name="L_calf_joint"
@@ -507,15 +505,14 @@
           rgba="0.79216 0.81961 0.93333 1" />
       </material>
     </visual>
-    <!-- <collision>
+    <collision>
       <origin
-        xyz="0 0 0"
+        xyz="0 -0.0141 -0.175"
         rpy="0 0 0" />
-      <geometry>
-        <mesh
-          filename="meshes/R_thigh.STL" />
+      <geometry>                                  
+          <cylinder radius="0.04" length="0.30"/>
       </geometry>
-    </collision> -->
+    </collision>
   </link>
   <joint
     name="R_thigh_joint"
@@ -565,15 +562,14 @@
           rgba="0.79216 0.81961 0.93333 1" />
       </material>
     </visual>
-    <!-- <collision>
+    <collision>
       <origin
-        xyz="0 0 0"
+        xyz="0 -0.0141 -0.175"
         rpy="0 0 0" />
-      <geometry>
-        <mesh
-          filename="meshes/R_calf.STL" />
+      <geometry>                                  
+          <cylinder radius="0.04" length="0.30"/>
       </geometry>
-    </collision> -->
+    </collision>
   </link>
   <joint
     name="R_calf_joint"
