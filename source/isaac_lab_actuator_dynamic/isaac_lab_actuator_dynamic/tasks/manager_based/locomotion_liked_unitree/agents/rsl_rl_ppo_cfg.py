@@ -4,21 +4,21 @@ from isaaclab_rl.rsl_rl import RslRlOnPolicyRunnerCfg, RslRlPpoActorCriticCfg, R
 
 @configclass
 class WalkingRobotPPORunnerCfg(RslRlOnPolicyRunnerCfg):
-    num_steps_per_env = 28
+    num_steps_per_env = 24
     max_iterations = 100000
     save_interval = 50
     experiment_name = "walking_robot_unitree"   
     empirical_normalization = False
 
     # resume = True
-    # load_checkpoint = "model_48550.pt"
-    # load_run = "2025-09-12_02-28-39"
+    # load_checkpoint = "model_950.pt"
+    # load_run = "2025-09-13_17-09-13"
 
     policy = RslRlPpoActorCriticRecurrentCfg(
-        init_noise_std = 0.8,
+        init_noise_std = 1.0,
         activation = "elu",
-        actor_hidden_dims = [128, 128, 128],
-        critic_hidden_dims = [128, 128, 128],
+        actor_hidden_dims = [256, 256, 256],
+        critic_hidden_dims = [256, 256, 256],
         rnn_type = "gru",
         rnn_hidden_dim = 64,
         rnn_num_layers = 1

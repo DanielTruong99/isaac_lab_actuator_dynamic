@@ -164,8 +164,10 @@ def feet_schedule_contact_with_cmd(env: WalkingRobotEnv, sensor_cfg: SceneEntity
 
     is_contact = torch.max(torch.norm(net_contact_forces[:, :, sensor_cfg.body_ids], dim=-1), dim=1)[0] > 1.0 # type: ignore
 
-    left_leg_result = (~(is_contact[:, 0] ^ (env.phase_left < 0.55))) * is_vcmd_gt + is_contact[:, 0] * (~is_vcmd_gt)
-    right_leg_result = (~(is_contact[:, 1] ^ (env.phase_right < 0.55))) * is_vcmd_gt + is_contact[:, 1] * (~is_vcmd_gt)
+    # left_leg_result = (~(is_contact[:, 0] ^ (env.phase_left < 0.55))) * is_vcmd_gt + is_contact[:, 0] * (~is_vcmd_gt)
+    # right_leg_result = (~(is_contact[:, 1] ^ (env.phase_right < 0.55))) * is_vcmd_gt + is_contact[:, 1] * (~is_vcmd_gt)
+    left_leg_result = (~(is_contact[:, 0] ^ (env.phase_left < 0.55))) * is_vcmd_gt
+    right_leg_result = (~(is_contact[:, 1] ^ (env.phase_right < 0.55))) * is_vcmd_gt
     result = result + left_leg_result + right_leg_result
     return result
 
@@ -196,6 +198,29 @@ def stand_still_contact(env: WalkingRobotEnv, sensor_cfg: SceneEntityCfg) -> tor
     result = result + (~is_contact[:, 0] * is_vcmd_lt) + (~is_contact[:, 1] * is_vcmd_lt)
     return result
 
+def stand_still(env: WalkingRobotEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
+    """
+    Calculate the stand still contact reward for a walking robot environment.
+
+    This function computes a reward based on whether the feet are in contact with the ground
+    when the commanded base velocity is below a certain threshold. If the commanded velocity
+    is low, the reward is given for having contact; otherwise, no reward is given.
+
+    Args:
+        env (WalkingRobotEnv): The walking robot environment instance.
+        sensor_cfg (SceneEntityCfg): The configuration for the contact sensor.
+
+    Returns:
+        torch.Tensor: A tensor indicating the stand still contact reward for each environment.
+    """
+    v_cmd = env.command_manager.get_command("base_velocity")
+    is_vcmd_lt = torch.norm(v_cmd,dim=-1) < 0.1
+
+    asset: Articulation = env.scene[asset_cfg.name]
+    # compute out of limits constraints
+    angle = asset.data.joint_pos[:, asset_cfg.joint_ids] - asset.data.default_joint_pos[:, asset_cfg.joint_ids]
+    return torch.sum(torch.abs(angle), dim=1) * is_vcmd_lt
+
 def feet_height(env, sensor_cfg: SceneEntityCfg, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
     """
     Calculate the height of the feet relative to the base position of the robot and return a reward based on the 
@@ -221,5 +246,5 @@ def feet_height(env, sensor_cfg: SceneEntityCfg, asset_cfg: SceneEntityCfg = Sce
     base_pos_w = asset.data.root_pos_w
     feet_height = feet_pos_w - base_pos_w.unsqueeze(1) 
 
-    result = (~is_contact) * torch.square(feet_height[:, :, 2] - (-0.7405))
+    result = (~is_contact) * torch.square(feet_height[:, :, 2] - (-0.7205))
     return torch.sum(result, dim=1) * is_vcmd_gt
