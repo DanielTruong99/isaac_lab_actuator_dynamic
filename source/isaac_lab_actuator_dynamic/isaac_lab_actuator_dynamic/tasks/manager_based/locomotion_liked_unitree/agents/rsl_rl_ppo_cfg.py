@@ -10,9 +10,9 @@ class WalkingRobotPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     experiment_name = "walking_robot_unitree"   
     empirical_normalization = False
 
-    # resume = True
-    # load_checkpoint = "model_950.pt"
-    # load_run = "2025-09-13_17-09-13"
+    resume = True
+    load_checkpoint = "model_37500.pt"
+    load_run = "2025-09-13_18-04-39"
 
     policy = RslRlPpoActorCriticRecurrentCfg(
         init_noise_std = 1.0,

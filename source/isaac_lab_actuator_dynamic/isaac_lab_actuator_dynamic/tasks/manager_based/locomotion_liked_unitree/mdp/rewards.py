@@ -246,5 +246,5 @@ def feet_height(env, sensor_cfg: SceneEntityCfg, asset_cfg: SceneEntityCfg = Sce
     base_pos_w = asset.data.root_pos_w
     feet_height = feet_pos_w - base_pos_w.unsqueeze(1) 
 
-    result = (~is_contact) * torch.square(feet_height[:, :, 2] - (-0.7205))
+    result = (~is_contact) * torch.square(feet_height[:, :, 2] - (-0.7405))
     return torch.sum(result, dim=1) * is_vcmd_gt

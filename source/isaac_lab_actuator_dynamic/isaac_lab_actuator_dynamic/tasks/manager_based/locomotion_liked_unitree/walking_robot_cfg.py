@@ -174,7 +174,7 @@ class WalkingRobotRewardCfg:
     )
     feet_schedule_contact = RewardTermCfg(
         func=custom_mdp.feet_schedule_contact_with_cmd,
-        weight=1.0,
+        weight=1.2,
         params={"sensor_cfg": SceneEntityCfg(name="contact_forces", body_names=["L_toe", "R_toe"])},
     )
 
@@ -183,7 +183,7 @@ class WalkingRobotRewardCfg:
     base_height_l2 = RewardTermCfg(
         func=mdp.base_height_l2,
         weight=-20.0,
-        params={"target_height": 0.77},
+        params={"target_height": 0.78},
     )
     dof_vel = RewardTermCfg(
         func=mdp.joint_vel_l2,
@@ -227,7 +227,7 @@ class WalkingRobotRewardCfg:
 
     stand_still_contact = RewardTermCfg(
         func=custom_mdp.stand_still_contact,
-        weight=-0.5,
+        weight=-0.7,
         params={
             "sensor_cfg": SceneEntityCfg(name="contact_forces", body_names=["L_toe", "R_toe"]),
         },
@@ -235,7 +235,7 @@ class WalkingRobotRewardCfg:
 
     stand_still = RewardTermCfg(
         func=custom_mdp.stand_still,
-        weight=-0.5,
+        weight=-0.7,
         params={
             "asset_cfg": SceneEntityCfg("robot")
         },
@@ -262,13 +262,13 @@ class WalkingRobotCommandsCfg:
         class_type=CustomUniformVelocityCommand,
         asset_name="robot",
         resampling_time_range=(5.0, 5.0),
-        rel_standing_envs=0.6,
+        rel_standing_envs=0.35,
         rel_heading_envs=1.0,
         heading_command=False,
         heading_control_stiffness=0.5,
         debug_vis=False,
         ranges=mdp.UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(-0.0, 1.5), lin_vel_y=(-0.3, 0.3), ang_vel_z=(-0.2, 0.2)
+            lin_vel_x=(-0.75, 3.5), lin_vel_y=(-1.0, 1.0), ang_vel_z=(-0.5, 0.5)
         ),
     )
 
@@ -340,7 +340,7 @@ class WalkingRobotEnvPLayCfg(WalkingRobotEnvCfg):
         self.scene.terrain.terrain_generator.curriculum = False #type: ignore
         self.curriculum.terrain_levels = None #type: ignore
 
-        self.commands.base_velocity.ranges.lin_vel_x = (0.5, 0.5)
+        self.commands.base_velocity.ranges.lin_vel_x = (0.8, 0.8)
         self.commands.base_velocity.ranges.lin_vel_y = (-0.0, 0.0)
         self.commands.base_velocity.ranges.ang_vel_z = (-0.0, 0.0)
    
