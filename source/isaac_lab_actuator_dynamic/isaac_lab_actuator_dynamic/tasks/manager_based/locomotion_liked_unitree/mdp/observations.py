@@ -20,3 +20,7 @@ def contact_state(env: WalkingRobotEnv, sensor_cfg: SceneEntityCfg, asset_cfg: S
 def joint_torque(env: WalkingRobotEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
     asset: Articulation = env.scene[asset_cfg.name]
     return asset.data.applied_torque[:, asset_cfg.joint_ids]
+
+def joint_acc(env: WalkingRobotEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
+    asset: Articulation = env.scene[asset_cfg.name]
+    return asset.data.joint_acc[:, asset_cfg.joint_ids]

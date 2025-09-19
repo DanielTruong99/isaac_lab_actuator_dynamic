@@ -20,12 +20,34 @@ from isaaclab.managers import (
     EventTermCfg,
 )
 from isaaclab.utils.noise import AdditiveUniformNoiseCfg, AdditiveGaussianNoiseCfg
-
+from isaaclab.envs.mdp.actions import joint_actions
 ##
 # User defined configs
 ##
 from isaac_lab_actuator_dynamic.assets import LEGACTUATORDYNAMIC_CFG, LEGACTUATORDYNAMIC_2_CFG, LEGWALKING_CFG
 from . import mdp as custom_mdp
+
+class CustomJointPositionAction(joint_actions.JointPositionAction):
+    def __init__(self, cfg, env):
+        # initialize the action term
+        super().__init__(cfg, env)
+        
+        self.filtered_actions = torch.zeros_like(self.processed_actions)
+
+    def apply_actions(self):
+        # set position targets
+        self.filtered_actions = 0.0 * self.filtered_actions + (1 - 0.0) * self.processed_actions
+        self._asset.set_joint_position_target(self.filtered_actions, joint_ids=self._joint_ids)
+
+    def reset(self, env_ids) -> None:
+        self._raw_actions[env_ids] = 0.0
+        self.filtered_actions[env_ids] = 0.0
+
+@configclass
+class Actions2PlayCfg:
+    """Action specifications for the MDP."""
+
+    joint_pos = mdp.JointPositionActionCfg(class_type=CustomJointPositionAction, asset_name="robot", joint_names=[".*"], scale=0.5, use_default_offset=True)
 
 @configclass
 class WalkingRobotObservationsCfg(ObservationsCfg):
@@ -98,6 +120,7 @@ class WalkingRobotObservationsCfg(ObservationsCfg):
         """Observations for debug group."""
         joint_torque = ObservationTermCfg(func=custom_mdp.joint_torque)
         base_height = ObservationTermCfg(func=mdp.base_pos_z)
+        joint_acc = ObservationTermCfg(func=custom_mdp.joint_acc)
 
         def __post_init__(self):
             self.enable_corruption = False
@@ -189,7 +212,7 @@ class WalkingRobotRewardCfg:
         func=mdp.joint_vel_l2,
         weight=-1e-3,
     )
-    dof_acc_l2 = RewardTermCfg(func=mdp.joint_acc_l2, weight=-2.5e-7)
+    dof_acc_l2 = RewardTermCfg(func=mdp.joint_acc_l2, weight=-2.5e-5)
     lin_vel_z_l2 = RewardTermCfg(func=mdp.lin_vel_z_l2, weight=-0.5)
     ang_vel_xy_l2 = RewardTermCfg(func=mdp.ang_vel_xy_l2, weight=-0.05)
     action_rate_l2 = RewardTermCfg(func=mdp.action_rate_l2, weight=-0.03)
@@ -268,7 +291,7 @@ class WalkingRobotCommandsCfg:
         heading_control_stiffness=0.5,
         debug_vis=False,
         ranges=mdp.UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(-0.75, 3.5), lin_vel_y=(-1.0, 1.0), ang_vel_z=(-0.5, 0.5)
+            lin_vel_x=(-0.0, 2.0), lin_vel_y=(-0.0, 0.0), ang_vel_z=(-1.0, 1.0)
         ),
     )
 
@@ -290,6 +313,7 @@ class WalkingRobotEnvCfg(LocomotionVelocityRoughEnvCfg):
     events: WalkingRobotEventCfg = WalkingRobotEventCfg()
     commands: WalkingRobotCommandsCfg = WalkingRobotCommandsCfg()
     terminations: TerminationsCfg = TerminationsCfg()
+    actions: Actions2PlayCfg = Actions2PlayCfg()
 
     def __post_init__(self):
         super().__post_init__()
@@ -340,8 +364,8 @@ class WalkingRobotEnvPLayCfg(WalkingRobotEnvCfg):
         self.scene.terrain.terrain_generator.curriculum = False #type: ignore
         self.curriculum.terrain_levels = None #type: ignore
 
-        self.commands.base_velocity.ranges.lin_vel_x = (0.8, 0.8)
-        self.commands.base_velocity.ranges.lin_vel_y = (-0.0, 0.0)
+        self.commands.base_velocity.ranges.lin_vel_x = (0.7, 0.7)
+        self.commands.base_velocity.ranges.lin_vel_y = (-0.01, -0.01)
         self.commands.base_velocity.ranges.ang_vel_z = (-0.0, 0.0)
    
 
@@ -353,6 +377,7 @@ class WalkingRobotEnvPLayCfg(WalkingRobotEnvCfg):
         # self.sim.use_fabric = False
         # self.sim.device = "cpu"
         # self.actions.joint_pos.scale = {"R_toe_joint": 0.001}
+        # self.actions.joint_pos = Actions2PlayCfg()
 
  
 
