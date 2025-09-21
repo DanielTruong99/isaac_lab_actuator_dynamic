@@ -248,3 +248,20 @@ def feet_height(env, sensor_cfg: SceneEntityCfg, asset_cfg: SceneEntityCfg = Sce
 
     result = (~is_contact) * torch.square(feet_height[:, :, 2] - (-0.7405))
     return torch.sum(result, dim=1) * is_vcmd_gt
+
+
+def action_limits(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
+    """Penalize joint positions if they cross the soft limits.
+
+    This is computed as a sum of the absolute value of the difference between the joint position and the soft limits.
+    """
+    # extract the used quantities (to enable type-hinting)
+    asset = env.scene[asset_cfg.name]
+    # compute out of limits constraints
+    out_of_limits = -(
+        env.action_manager.action[:, asset_cfg.joint_ids] - asset.data.soft_joint_pos_limits[:, asset_cfg.joint_ids, 0]
+    ).clip(max=0.0)
+    out_of_limits += (
+        env.action_manager.action[:, asset_cfg.joint_ids] - asset.data.soft_joint_pos_limits[:, asset_cfg.joint_ids, 1]
+    ).clip(min=0.0)
+    return torch.sum(out_of_limits, dim=1)

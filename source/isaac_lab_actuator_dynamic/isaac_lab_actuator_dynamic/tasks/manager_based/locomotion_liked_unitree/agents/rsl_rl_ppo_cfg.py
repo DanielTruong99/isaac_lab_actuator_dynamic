@@ -10,18 +10,28 @@ class WalkingRobotPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     experiment_name = "walking_robot_unitree"   
     empirical_normalization = False
 
-    resume = True
-    load_checkpoint = "model_37500.pt"
-    load_run = "2025-09-13_18-04-39"
+    # resume = True
+    # load_checkpoint = "model_10000.pt"
+    # load_run = "2025-09-20_17-11-53"
 
-    policy = RslRlPpoActorCriticRecurrentCfg(
+    # policy = RslRlPpoActorCriticRecurrentCfg(
+    #     init_noise_std = 1.0,
+    #     activation = "elu",
+    #     actor_hidden_dims = [256, 256, 256],
+    #     critic_hidden_dims = [256, 256, 256],
+    #     rnn_type = "gru",
+    #     rnn_hidden_dim = 64,
+    #     rnn_num_layers = 1
+    # )
+
+    policy = RslRlPpoActorCriticCfg(
         init_noise_std = 1.0,
         activation = "elu",
         actor_hidden_dims = [256, 256, 256],
         critic_hidden_dims = [256, 256, 256],
-        rnn_type = "gru",
-        rnn_hidden_dim = 64,
-        rnn_num_layers = 1
+        # rnn_type = "gru",
+        # rnn_hidden_dim = 64,
+        # rnn_num_layers = 1
     )
 
     algorithm = RslRlPpoAlgorithmCfg(
