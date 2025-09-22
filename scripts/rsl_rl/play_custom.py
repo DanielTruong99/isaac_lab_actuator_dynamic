@@ -194,19 +194,19 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
             obs, _, _, _ = env.step(actions)
 
         # get applied torques
-        applied_torques = env.unwrapped.scene["robot"].data.applied_torque
+        applied_torques = env.unwrapped.scene["robot"].data.applied_torque.clone()
         applied_torques_list.append(applied_torques)
 
         # get angular velocities
-        angular_velocities = env.unwrapped.scene["robot"].data.root_ang_vel_b
+        angular_velocities = env.unwrapped.scene["robot"].data.root_ang_vel_b.clone()
         angular_velocities_list.append(angular_velocities)
 
         # get joint velocities
-        joint_vels = env.unwrapped.scene["robot"].data.joint_vel
+        joint_vels = env.unwrapped.scene["robot"].data.joint_vel.clone()
         joint_vels_list.append(joint_vels)
 
         # get project g
-        project_g = env.unwrapped.scene["robot"].data.projected_gravity_b
+        project_g = env.unwrapped.scene["robot"].data.projected_gravity_b.clone()
         project_g_list.append(project_g)
 
         play_counter += dt

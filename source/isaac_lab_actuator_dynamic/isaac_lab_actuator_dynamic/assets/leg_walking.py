@@ -25,7 +25,7 @@ LEGWALKING_CFG = ArticulationCfg(
         ),
     ),
     init_state=ArticulationCfg.InitialStateCfg(
-        pos=(0.0, 0.0, 0.78),
+        pos=(0.0, 0.0, 0.73),
         joint_pos={
             'L_hip_joint': 0.0, # limit -35, 35 (degrees)
             'L_hip2_joint': 0.0, # limit -35, 35 (degrees)
@@ -46,6 +46,18 @@ LEGWALKING_CFG = ArticulationCfg(
             joint_names_expr=[".*_hip_joint", ".*_hip2_joint", ".*_thigh_joint", ".*_calf_joint"],
             effort_limit=300.0,
             velocity_limit=100.0,
+            friction={
+                ".*_hip_joint": 0.1,
+                ".*_hip2_joint": 0.1,
+                ".*_thigh_joint": 0.2,
+                ".*_calf_joint": 0.1,
+            },
+            dynamic_friction={
+                ".*_hip_joint": 0.1,
+                ".*_hip2_joint": 0.1,
+                ".*_thigh_joint": 0.2,
+                ".*_calf_joint": 0.1,
+            },
             stiffness={
                 # ".*_hip_joint": 50.0,
                 # ".*_hip2_joint": 70.0,

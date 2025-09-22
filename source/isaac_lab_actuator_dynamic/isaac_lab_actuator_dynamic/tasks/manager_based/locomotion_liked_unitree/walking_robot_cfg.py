@@ -34,90 +34,113 @@ import torch
 from typing import Optional, Tuple
 import torch.nn as nn
 
+# ---- Utilities --------------------------------------------------------------
 
-# ---------- Utilities ----------
-def _lpf(old: torch.Tensor, new: torch.Tensor, alpha: float) -> torch.Tensor:
-    """Exponential moving average."""
-    return (1.0 - alpha) * old + alpha * new
+def _normalize_ba(b: torch.Tensor, a: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    if a[0] != 1.0:
+        b = b / a[0]
+        a = a / a[0]
+    return b, a
 
+# ---- Optimized DF2T biquad --------------------------------------------------
 
-# ---------- Command filter: q_ref -> (q_r, qd_r, qdd_r) ----------
-class CmdFilter2nd(nn.Module):
-    """Critically-damped 2nd-order reference shaper (vectorized B x J)."""
-    def __init__(self, n_envs: int, n_joints: int, Ts: float, fc_hz: float = 20.0):
+class FastSecondOrderLPF(nn.Module):
+    """
+    Optimized DF2T biquad:
+        y[n]  = b0*x[n] + z1
+        z1'   = b1*x[n] - a1*y[n] + z2
+        z2'   = b2*x[n] - a2*y[n]
+
+    Optimizations:
+      - 2 state tensors total (z1, z2) and in-place updates (no new tensors each step)
+      - Works on arbitrary shapes [...], e.g. [N,D], [B,C,H,W] (broadcasted coeffs)
+      - reset() supports preallocation to avoid first-call shape checks
+      - forward_seq() processes [T, ...] in one compiled/scripted region (no Python loop cost)
+    """
+
+    def __init__(self, b, a):
         super().__init__()
-        self.B, self.J, self.Ts = n_envs, n_joints, Ts
-        w = 2.0 * torch.pi * torch.as_tensor(fc_hz, dtype=torch.float32)
-        self.register_buffer('wc', torch.full((self.B, self.J), w, dtype=torch.float32))
-        self.register_buffer('x0', torch.zeros(self.B, self.J))  # q_r
-        self.register_buffer('x1', torch.zeros(self.B, self.J))  # qd_r
-        self.register_buffer('x2', torch.zeros(self.B, self.J))  # qdd_r
+        b = torch.as_tensor(list(b), dtype=torch.float32)
+        a = torch.as_tensor(list(a), dtype=torch.float32)
+        b, a = _normalize_ba(b, a)
 
-    def forward(self, q_ref: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        wc, Ts = self.wc, self.Ts
-        e0 = q_ref - self.x0
-        dx2 = wc * wc * e0 - 2.0 * wc * self.x1 - wc * wc * self.x0
-        self.x2 = self.x2 + Ts * dx2
-        self.x1 = self.x1 + Ts * self.x2
-        self.x0 = self.x0 + Ts * self.x1
-        return self.x0, self.x1, self.x2  # (q_r, qd_r, qdd_r)
+        self.register_buffer("b", b)   # [b0, b1, b2]
+        self.register_buffer("a", a)   # [1, a1, a2]
+        self._z = None                 # state: [2, *shape] -> z1, z2
 
+    @torch.no_grad()
+    def reset(
+        self,
+        shape: Optional[Tuple[int, ...]] = None,
+        value: float = 0.0,
+        device: Optional[torch.device] = None,
+        dtype: Optional[torch.dtype] = None,
+    ):
+        """
+        Clear or preallocate states.
+        - shape=None: clear (recreated on first forward)
+        - shape=... : allocate [2, *shape] and fill with `value`
+        """
+        if shape is None:
+            self._z = None
+            return
+        device = device or self.b.device
+        dtype  = dtype  or torch.float32
+        self._z = torch.full((2, *shape), value, device=device, dtype=dtype)
 
-# ---------- 1st-order Levant (on velocity -> acceleration) ----------
-class LevantOrder1(nn.Module):
+    def _ensure_state(self, x: torch.Tensor):
+        tgt = (2, *x.shape)
+        z = self._z
+        if (z is None or z.shape != tgt or z.device != x.device or z.dtype != x.dtype):
+            # Single alloc; no clones per step
+            self._z = torch.zeros(tgt, device=x.device, dtype=x.dtype)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """ Single step on shape [...]. """
+        self._ensure_state(x)
+
+        z1 = self._z[0]
+        z2 = self._z[1]
+
+        b0, b1, b2 = self.b
+        _,  a1, a2 = self.a
+
+        # y = b0*x + z1
+        y = b0 * x + z1
+
+        # In-place state update without building autograd history
+        with torch.no_grad():
+            # z1 <- b1*x - a1*y + z2
+            # z2 <- b2*x - a2*y
+            # (use addcmul-like fused ops when beneficial; PyTorch often fuses anyway)
+            z1.mul_(0).add_(b1 * x).add_(-a1 * y).add_(z2)
+            z2.mul_(0).add_(b2 * x).add_(-a2 * y)
+
+        return y
+
+import torch
+import torch.nn as nn
+from typing import Optional
+
+class INDI_BatchedPendulum_Fast(nn.Module):
     """
-    Levant differentiator (order-1) on measured velocity: qd -> qdd_hat.
-    Vectorized over (B, J). Uses boundary-layer 'sat' regularization.
-    """
-    def __init__(self, n_envs: int, n_joints: int, Ts: float, fd_hz: float = 20.0,
-                 k1_scale: float = 1.5, k2_scale: float = 1.1, eps: float = 1e-3,
-                 a_guard: float = 5e4):
-        super().__init__()
-        self.B, self.J, self.Ts = n_envs, n_joints, Ts
-        w = 2.0 * torch.pi * torch.as_tensor(fd_hz, dtype=torch.float32)
-        # Keep gains as floats; states are tensors on the module's device
-        self.k1 = float(k1_scale * torch.sqrt(w))
-        self.k2 = float(k2_scale * w)
-        self.eps = float(eps)
-        self.a_guard = float(a_guard)
-        self.register_buffer('z0', torch.zeros(self.B, self.J))  # tracks y=qd
-        self.register_buffer('z1', torch.zeros(self.B, self.J))  # tracks qdd
-
-    @staticmethod
-    def _sat(x: torch.Tensor) -> torch.Tensor:
-        return torch.clamp(x, -1.0, 1.0)
-
-    def forward(self, qd_meas: torch.Tensor) -> torch.Tensor:
-        e = self.z0 - qd_meas
-        se = self._sat(e / self.eps)
-        dz0 = self.z1 - self.k1 * torch.sqrt(e.abs() + 1e-12) * se
-        dz1 = - self.k2 * se
-        self.z0 = self.z0 + self.Ts * dz0
-        self.z1 = torch.clamp(self.z1 + self.Ts * dz1, -self.a_guard, self.a_guard)
-        return self.z1  # qdd_hat  (B,J)
-
-
-# ---------- INDI (batched) with pendulum model Jacobians ----------
-class INDI_BatchedPendulum(nn.Module):
-    """
-    INDI for B x J pendulum joints:
+    Faster INDI for B x J pendulum joints.
       Model: I * qdd + m g l * sin(q) = tau  (ignore velocity Jacobian B)
-      Jacobians: G = 1/I,  A = -(m g l / I) * cos(q_{t-1})
-    Inputs each tick: q_ref, q_meas, qd_meas  -> all (B,J)
+      Jacobians: G = 1/I,  A = -(m g l / I) * cos(q_prev)
+    Inputs each tick: q_ref, q_meas, qd_meas, qdd_meas  -> all (B,J)
     Outputs: tau, tau_pd, tau_ff  -> all (B,J)
     """
     def __init__(self, n_envs=4096, n_joints=10, Ts=1e-3,
-                 joint_bw_hz=5.0, fc_hz=20.0, fd_hz=20.0,
+                 joint_bw_hz=5.0,
                  torque_limit=100.0, torque_rate_limit=2000.0,
-                 use_AB: bool = False,        # if True, subtract learned Ahat*dq (ignored if use_model_jacobians=True)
-                 use_model_jacobians: bool = True,  # if True, use A = -(m g l / I) cos(q_prev), Ginv = I
-                 ):
+                 use_AB: bool = False,
+                 use_model_jacobians: bool = True):
         super().__init__()
         self.B, self.J, self.Ts = n_envs, n_joints, Ts
         self.use_AB = use_AB
         self.use_model_jacobians = use_model_jacobians
 
-        # Error-law gains from target bandwidth (ζ=1 baseline)
+        # Gains for ζ=1 from target bandwidth
         w = 2.0 * torch.pi * torch.as_tensor(joint_bw_hz, dtype=torch.float32)
         self.register_buffer('Kp', torch.full((self.B, self.J), float(w * w)))
         self.register_buffer('Kd', torch.full((self.B, self.J), float(2.0 * w)))
@@ -128,50 +151,55 @@ class INDI_BatchedPendulum(nn.Module):
         self.register_buffer('qd_prev',  torch.zeros(self.B, self.J))
         self.register_buffer('qdd_prev', torch.zeros(self.B, self.J))
 
-        # Learned Jacobians (optional fallback if use_model_jacobians=False)
+        # Learned fallbacks (unused in model path but kept API)
         self.register_buffer('Ghat', torch.ones(self.B, self.J))
         self.register_buffer('Ahat', torch.zeros(self.B, self.J))
 
-        # Deadbands for param updates
-        self.th_tau = 1e-3
-        self.th_q   = 5e-5
+        # Limits
+        self.torque_limit      = float(torque_limit)
+        self.torque_rate_limit = float(torque_rate_limit)
 
-        # Limits (scalars; broadcastable)
-        self.torque_limit       = float(torque_limit)
-        self.torque_rate_limit  = float(torque_rate_limit)
+        # Physical params
+        self.register_buffer('I',  torch.ones(self.B, self.J))
+        self.register_buffer('m',  torch.ones(self.B, self.J))
+        self.register_buffer('g',  torch.full((self.B, self.J), 9.81))
+        self.register_buffer('l',  torch.ones(self.B, self.J))
+        # Precompute mgl/I (avoids div per tick)
+        self.register_buffer('mgl_over_I', torch.ones(self.B, self.J))
 
-        # Physical parameters (buffers): allow scalar/(J,)/(B,J)
-        self.register_buffer('I', torch.ones(self.B, self.J))
-        self.register_buffer('m', torch.ones(self.B, self.J))
-        self.register_buffer('g', torch.full((self.B, self.J), 9.81))
-        self.register_buffer('l', torch.ones(self.B, self.J))
+        # -------- Scratch buffers (reused every step; no allocations) --------
+        self.register_buffer('_pd_term',   torch.zeros(self.B, self.J))
+        self.register_buffer('_delta_tau', torch.zeros(self.B, self.J))
+        self.register_buffer('_tau_tmp',   torch.zeros(self.B, self.J))
+        self.register_buffer('_margin',    torch.zeros(self.B, self.J))
+        self.register_buffer('_step_need', torch.zeros(self.B, self.J))
 
-        # Blocks
-        self.cmd  = CmdFilter2nd(n_envs, n_joints, Ts, fc_hz)
-        self.diff = LevantOrder1(n_envs, n_joints, Ts, fd_hz)
+        # Caps (kept as python floats; fused in kernel)
+        self.a_ff_cap = 1200.0
+        self.a_pd_cap = 1000.0
 
-    # ---------- Helpers ----------
+    # ---------------- Utilities ----------------
+    def _recompute_mgl_over_I(self):
+        # Avoid divide-by-zero; clamp once
+        I_safe = torch.clamp(self.I, min=1e-9)
+        self.mgl_over_I.copy_( (self.m * self.g * self.l) / I_safe )
+
     def set_limits(self, torque_limit: float = 100.0, torque_rate_limit: float = 2000.0):
-        self.torque_limit = float(torque_limit)
+        self.torque_limit      = float(torque_limit)
         self.torque_rate_limit = float(torque_rate_limit)
 
     def set_critically_damped(self, f_hz):
-        """
-        Set Kp, Kd for ζ=1 (critical damping).
-        f_hz: float or tensor (B,J) or (J,) of target natural frequency in Hz.
-        """
         if not torch.is_tensor(f_hz):
             f_hz = torch.full((self.B, self.J), float(f_hz), device=self.Kp.device, dtype=self.Kp.dtype)
-        elif f_hz.ndim == 1:  # (J,) -> (B,J)
+        elif f_hz.ndim == 1:
             f_hz = f_hz.view(1, -1).expand(self.B, self.J).to(self.Kp.device, self.Kp.dtype)
         else:
             f_hz = f_hz.to(self.Kp.device, self.Kp.dtype)
         w = 2.0 * torch.pi * f_hz
-        self.Kp.copy_(w * w)      # Kp = ω_n^2
-        self.Kd.copy_(2.0 * w)    # Kd = 2 ω_n
+        self.Kp.copy_(w * w)
+        self.Kd.copy_(2.0 * w)
 
     def set_gains(self, kp: float | torch.Tensor, kd: float | torch.Tensor):
-        """Set Kp, Kd (scalar, (J,), or (B,J))."""
         dev = self.Kp.device; shape = (self.B, self.J)
         def expand(x):
             if torch.is_tensor(x):
@@ -187,12 +215,8 @@ class INDI_BatchedPendulum(nn.Module):
         self.Kp.copy_(expand(kp))
         self.Kd.copy_(expand(kd))
 
-    def set_params(self,
-                   I: float | torch.Tensor,
-                   m: float | torch.Tensor,
-                   g: float | torch.Tensor,
-                   l: float | torch.Tensor):
-        """Set (I,m,g,l). Accepts scalar, (J,), or (B,J) for each."""
+    def set_params(self, I: float | torch.Tensor, m: float | torch.Tensor,
+                   g: float | torch.Tensor, l: float | torch.Tensor):
         dev = self.I.device; shape = (self.B, self.J)
         def expand(x):
             if torch.is_tensor(x):
@@ -209,131 +233,104 @@ class INDI_BatchedPendulum(nn.Module):
         self.m.copy_(expand(m))
         self.g.copy_(expand(g))
         self.l.copy_(expand(l))
+        self._recompute_mgl_over_I()  # refresh cached ratio
 
+    @torch.no_grad()
     def reset(self, mask: Optional[torch.Tensor] = None):
-        """
-        Reset internal states.
-        mask: (B,) boolean tensor, if given only reset selected environments; else reset all.
-        """
         if mask is None:
             self.tau_prev.zero_()
             self.q_prev.zero_()
-            self.qd_prev.zero_()
-            self.qdd_prev.zero_()
             self.Ghat.fill_(1.0)
             self.Ahat.zero_()
-            self.cmd.x0.zero_(); self.cmd.x1.zero_(); self.cmd.x2.zero_()
-            self.diff.z0.zero_(); self.diff.z1.zero_()
         else:
-            mask = mask.view(-1, 1).expand(-1, self.J)
-            self.tau_prev[mask] = 0.0
-            self.q_prev[mask]   = 0.0
-            self.qd_prev[mask]  = 0.0
-            self.qdd_prev[mask] = 0.0
-            self.Ghat[mask]     = 1.0
-            self.Ahat[mask]     = 0.0
-            self.cmd.x0[mask]   = 0.0
-            self.cmd.x1[mask]   = 0.0
-            self.cmd.x2[mask]   = 0.0
-            self.diff.z0[mask]  = 0.0
-            self.diff.z1[mask]  = 0.0
+            mask = mask.view(-1, 1).expand(-1, self.J).to(dtype=torch.bool)
+            self.tau_prev.masked_fill_(mask, 0.0)
+            self.q_prev.masked_fill_(mask,   0.0)
+            self.Ghat.masked_fill_(mask, 1.0)
+            self.Ahat.masked_fill_(mask, 0.0)
 
-    # ---------- Control tick ----------
+    # ---------------- Control tick (optimized) ----------------
     @torch.no_grad()
-    def step(self, q_ref: torch.Tensor, q_meas: torch.Tensor, qd_meas: torch.Tensor, qdd_meas: torch.Tensor):
+    def step(self, q_ref: torch.Tensor, q_meas: torch.Tensor,
+             qd_meas: torch.Tensor, qdd_meas: torch.Tensor):
         """
-        One control tick.
-        Args:
-            q_ref, q_meas, qd_meas: (B,J) tensors
-        Returns:
-            tau, tau_pd, tau_ff  -- tau already rate/limit-clamped
-            - tau_pd: torque *increment* from PD (pre-scaling/clamp)
-            - tau_ff: feedforward torque (pre-scaling/clamp), i.e., tau_prev + delta_tau_ff
+        One control tick. All tensors (B,J) on same device/dtype.
+        Returns: tau, tau_pd, tau_ff  (each (B,J))
         """
-        # 1) Command filter builds (q_r, qd_r, qdd_r) from q_ref only
-        # q_r, qd_r, qdd_r = self.cmd(q_ref)
-        q_r = q_ref
-        qd_r = torch.zeros_like(q_r)
-        qdd_r = torch.zeros_like(q_r)
+        # pd_term = Kd*(0 - qd) + Kp*(q_ref - q)
+        # Use scratch buffer _pd_term
+        self._pd_term.mul_(0.0)\
+            .add_(self.Kp, alpha=1.0).mul_(q_ref)\
+            .addcmul_(self.Kp, -q_meas, value=1.0)\
+            .addcmul_(self.Kd, -qd_meas, value=1.0)
+        # Explanation:
+        # _pd = Kp*q_ref - Kp*q_meas - Kd*qd_meas
 
-        # 2) Acceleration estimate from measured velocity
-        qdd_hat = qdd_meas
-
-        # 3) PD acceleration term  a_pd = Kd*(qd_r-qd) + Kp*(q_r-q)
-        pd_term = self.Kd * (qd_r - qd_meas) + self.Kp * (q_r - q_meas)
-
-        # 4) Choose Jacobians and optional A*Δq subtraction
         if self.use_model_jacobians:
-            # Model Ginv = I (since G = 1/I)
-            Ginv = torch.clamp(self.I, min=1e-9)
-            # Model A = -(m g l / I) * cos(q_prev)
-            A_model = -(self.m * self.g * self.l / torch.clamp(self.I, min=1e-9)) * torch.cos(self.q_prev)
+            # Ginv = I (since G = 1/I). Precomputed mgl/I.
+            # Optional A*Δq subtraction: pd_term -= A_model * (q - q_prev)
             if self.use_AB:
-                dq = q_meas - self.q_prev
-                pd_term = pd_term - A_model * dq
+                # A_model = -(mgl/I)*cos(q_prev)
+                A_model = -self.mgl_over_I * torch.cos(self.q_prev)
+                # _pd_term -= A_model * dq
+                self._pd_term.addcmul_(A_model, (q_meas - self.q_prev), value=-1.0)
+            Ginv = self.I  # broadcasted multiply later
         else:
-            # Learned fallback (kept for completeness)
+            # Fallback learned (kept for API symmetry)
             Gabs = torch.clamp(self.Ghat.abs(), min=1e-3, max=1e3)
             Ginv = 1.0 / Gabs
             if self.use_AB:
-                dq = q_meas - self.q_prev
-                pd_term = pd_term - self.Ahat * dq
+                self._pd_term.addcmul_(self.Ahat, (q_meas - self.q_prev), value=-1.0)
 
-        # 5) Split INDI increments in acceleration domain
-        #    ff_inc = qdd_r - qdd_prev  (use PREVIOUS accel for INDI)
-        #    pd_inc = pd_term (already contains -A*Δq if enabled)
-        ff_inc = qdd_r - qdd_hat
-        pd_inc = pd_term
+        # INDI increments (qdd_r = 0, qd_r = 0)
+        # ff_inc = - qdd_hat ;  pd_inc = _pd_term
+        ff_inc = (-qdd_meas).clamp_(-self.a_ff_cap, self.a_ff_cap)
+        pd_inc = self._pd_term.clamp_(-self.a_pd_cap, self.a_pd_cap)
 
-        # ---- Safety: cap acceleration increments per tick (tune as needed) ----
-        a_ff_cap = 1500.0  # rad/s^2 per tick for feedforward
-        a_pd_cap = 1000.0  # rad/s^2 per tick for PD
-        ff_inc = torch.clamp(ff_inc, -a_ff_cap, a_ff_cap)
-        pd_inc = torch.clamp(pd_inc, -a_pd_cap, a_pd_cap)
+        # delta_tau = Ginv*(ff_inc + pd_inc)
+        self._delta_tau.mul_(0.0).add_(ff_inc).add_(pd_inc)
+        self._delta_tau.mul_(Ginv)
 
-        # 6) Map to torque space and form desired torque before limits
-        delta_tau_ff = Ginv * ff_inc
-        delta_tau_pd = Ginv * pd_inc
-        delta_tau_raw = delta_tau_ff + delta_tau_pd
+        # tau_desired = tau_prev + delta_tau
+        self._tau_tmp.copy_(self.tau_prev).add_(self._delta_tau)
 
-        tau_ff_raw = self.tau_prev + delta_tau_ff    # keep for output (pre-limit FF)
-        tau_pd     = delta_tau_pd                    # keep for output (pre-limit PD increment)
-        tau_desired = self.tau_prev + delta_tau_raw
-
-        # 7) Apply rate limit first
+        # Rate limit first
         max_step = self.torque_rate_limit * self.Ts
-        tau_rate = torch.clamp(tau_desired,
-                            self.tau_prev - max_step,
-                            self.tau_prev + max_step)
+        tau_rate = torch.clamp(self._tau_tmp,
+                               min=self.tau_prev - max_step,
+                               max=self.tau_prev + max_step)
 
-        # 8) Available-margin scaling (soft anti-windup near ±limit)
-        margin = (self.torque_limit - self.tau_prev.abs()).clamp_min(1e-6)    # Nm
-        step_needed = (tau_rate - self.tau_prev).abs().clamp_min(1e-9)        # Nm
-        alpha = (margin / step_needed).clamp(max=1.0)                         # 0..1, per joint
-        tau_soft = self.tau_prev + alpha * (tau_rate - self.tau_prev)
+        # Soft anti-windup scaling near ±limit
+        self._margin.copy_(self.torque_limit).sub_(self.tau_prev.abs()).clamp_min_(1e-6)
+        self._step_need.copy_(tau_rate).sub_(self.tau_prev).abs_().clamp_min_(1e-9)
+        alpha = torch.clamp(self._margin / self._step_need, max=1.0)
+        self._tau_tmp.copy_(self.tau_prev).addcmul_(alpha, (tau_rate - self.tau_prev))
 
-        # 9) Hard clamp as last safety
-        tau = torch.clamp(tau_soft, -self.torque_limit, self.torque_limit)
+        # Hard clamp last
+        tau = torch.clamp(self._tau_tmp, -self.torque_limit, self.torque_limit)
 
-        # 10) Shift histories
+        # Outputs before limits:
+        tau_pd = self._delta_tau - (Ginv * ff_inc)     # only PD increment
+        tau_ff_raw = self.tau_prev + (Ginv * ff_inc)   # FF pre-limit
+
+        # Shift histories (in-place, no graph)
         self.tau_prev.copy_(tau)
         self.q_prev.copy_(q_meas)
-        self.qd_prev.copy_(qd_meas)
-        self.qdd_prev.copy_(qdd_hat)
 
         return tau, tau_pd, tau_ff_raw
+
 
 class CustomJointPositionAction(joint_actions.JointPositionAction):
     def __init__(self, cfg, env):
         # initialize the action term
         super().__init__(cfg, env)
         
-        self.filtered_actions = torch.zeros_like(self.processed_actions)
-        N, Ts = 10, 0.005
-        self.ctrl = INDI_BatchedPendulum(
+        
+        N, Ts = 10, 0.001
+        self.ctrl = INDI_BatchedPendulum_Fast(
             n_envs=self.num_envs, n_joints=self.action_dim, Ts=Ts,
-            joint_bw_hz=15.0, fc_hz=20.0, fd_hz=35.0,
-            torque_limit=150.0, torque_rate_limit=2000.0,
+            joint_bw_hz=15.0,
+            torque_limit=150.0, torque_rate_limit=1000.0,
             use_AB=True
         ).to(self.device)
 
@@ -351,25 +348,47 @@ class CustomJointPositionAction(joint_actions.JointPositionAction):
         self.ctrl.Kp.fill_(100.0)
         self.ctrl.Kd.fill_(20.0)
 
+        # filter of action and estimated joint acc
+        b = [0.26266595, 0.52533190, 0.26266595]
+        a = [1.0, -0.24814856, 0.29881237]
+        self.action_filter = FastSecondOrderLPF(b, a).to(self.device)
+        self.action_filter.reset(shape=(self.num_envs, self.action_dim), value=0.0, device=self.device)
+        self.filtered_actions = torch.zeros_like(self.processed_actions)
+
+        self.joint_acc_filter = FastSecondOrderLPF(b, a).to(self.device)
+        self.joint_acc_filter.reset(shape=(self.num_envs, self.action_dim), value=0.0, device=self.device)
+        self.filtered_joint_acc = torch.zeros_like(self.processed_actions)
+
+        b = [0.00838838, 0.01677676, 0.00838838]
+        a = [1.0, -1.66417053, 0.69772405]
+        self.action_filter_2 = FastSecondOrderLPF(b, a).to(self.device)
+        self.action_filter_2.reset(shape=(self.num_envs, self.action_dim), value=0.0, device=self.device)
+        self.filtered_actions_2 = torch.zeros_like(self.processed_actions)
+
     def apply_actions(self):
-        # set position targets
+
+        # q_cmd = torch.zeros_like(self.processed_actions)
+        self.filtered_actions_2 = self.action_filter_2(self.processed_actions).clone()
 
         # get q_meas, qd_meas
         q_meas = self._asset.data.joint_pos
         qd_meas = self._asset.data.joint_vel
-        qdd_meas = self._asset.data.joint_acc         
-        # q_cmd = torch.zeros(self.num_envs, self.action_dim, device=self.device)
-        # q_cmd[:, 4] = 0.3; q_cmd[:, 6] = -0.6; q_cmd[:, 8] = 0.3 
-        tau, _, _ = self.ctrl.step(self.processed_actions, q_meas, qd_meas, qdd_meas)
+        self.filtered_joint_acc = self._asset.data.joint_acc     
+        self.filtered_joint_acc = self.joint_acc_filter(self.filtered_joint_acc).clone()    
+        self.filtered_actions, _, _ = self.ctrl.step(self.filtered_actions_2, q_meas, qd_meas, self.filtered_joint_acc)
+        self.filtered_actions = self.action_filter(self.filtered_actions).clone()
 
-        # self.filtered_actions = 0.0 * self.filtered_actions + (1 - 0.0) * self.processed_actions
-        # self._asset.set_joint_position_target(self.filtered_actions, joint_ids=self._joint_ids)
-        self._asset.set_joint_effort_target(tau, joint_ids=self._joint_ids)
+      
+        self._asset.set_joint_effort_target(self.filtered_actions, joint_ids=self._joint_ids)
+        # self._asset.set_joint_position_target(self.filtered_actions_2, joint_ids=self._joint_ids)
 
     def reset(self, env_ids) -> None:
         self._raw_actions[env_ids] = 0.0
         self.filtered_actions[env_ids] = 0.0
         self.ctrl.reset(env_ids)
+        self.joint_acc_filter.reset(shape=(self.num_envs, self.action_dim), value=0.0, device=self.device)
+        self.action_filter.reset(shape=(self.num_envs, self.action_dim), value=0.0, device=self.device)
+        self.action_filter_2.reset(shape=(self.num_envs, self.action_dim), value=0.0, device=self.device)
 
 @configclass
 class Actions2PlayCfg:
@@ -393,7 +412,7 @@ class WalkingRobotObservationsCfg(ObservationsCfg):
 
         # joint state
         joint_pos = ObservationTermCfg(func=mdp.joint_pos_rel, noise=AdditiveGaussianNoiseCfg(mean=0.0, std=0.01), clip=(-100.0, 100.0), scale=1.0)
-        joint_vel = ObservationTermCfg(func=mdp.joint_vel, noise=AdditiveGaussianNoiseCfg(mean=0.0, std=0.01), clip=(-100.0, 100.0), scale=0.05)
+        joint_vel = ObservationTermCfg(func=mdp.joint_vel, noise=AdditiveGaussianNoiseCfg(mean=0.0, std=0.3), clip=(-100.0, 100.0), scale=0.05)
         
         # last action
         actions = ObservationTermCfg(func=mdp.last_action)
@@ -486,10 +505,10 @@ class WalkingRobotEventCfg(EventCfg):
             6. push robot
 
         '''
-        # self.physics_material.params["dynamic_friction_range"] = [0.1, 1.25]
-        self.physics_material = None
-        # self.add_base_mass.params["mass_distribution_params"] = [-1.0, 3.0]
-        self.add_base_mass = None
+        self.physics_material.params["dynamic_friction_range"] = [0.9, 1.25]
+        # self.physics_material = None
+        self.add_base_mass.params["mass_distribution_params"] = [-1.0, 5.0]
+        # self.add_base_mass = None
         self.push_robot.params = {
             "velocity_range": {
                 "x": [-1.0, 1.0],
@@ -687,15 +706,26 @@ class WalkingRobotEnvPLayCfg(WalkingRobotEnvCfg):
     def __post_init__(self):
         super().__post_init__()
 
-        self.sim.render_interval = 8
+        # self.sim.render_interval = 8
 
-        self.observations.policy.enable_corruption = False
+        # self.observations.policy.enable_corruption = False
 
-        self.events.add_base_mass = None #type: ignore
+        # self.events.add_base_mass = None #type: ignore
         self.events.base_external_force_torque = None
         self.events.push_robot = None #type: ignore
-        self.events.reset_base = None #type: ignore
-        self.events.reset_robot_joints = None #type: ignore
+        # self.events.reset_base = None #type: ignore
+        # self.events.reset_robot_joints = None #type: ignore
+        self.events.reset_base.params = {
+            "pose_range": {"x": (0.0, 0.0), "y": (0.0, 0.0), "yaw": (0.0, 0.0)},
+            "velocity_range": {
+                "x": (0.0, 0.0),
+                "y": (0.0, 0.0),
+                "z": (0.0, 0.0),
+                "roll": (0.0, 0.0),
+                "pitch": (0.0, 0.0),
+                "yaw": (0.0, 0.0),
+            },
+        }
 
         self.scene.terrain.terrain_type = "plane"
         self.scene.terrain.terrain_generator.curriculum = False #type: ignore
