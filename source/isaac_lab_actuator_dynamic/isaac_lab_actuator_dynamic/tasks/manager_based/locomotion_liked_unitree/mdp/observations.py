@@ -24,3 +24,14 @@ def joint_torque(env: WalkingRobotEnv, asset_cfg: SceneEntityCfg = SceneEntityCf
 def joint_acc(env: WalkingRobotEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
     asset: Articulation = env.scene[asset_cfg.name]
     return asset.data.joint_acc[:, asset_cfg.joint_ids]
+
+def joint_pos_and_cmd(env: WalkingRobotEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
+    asset: Articulation = env.scene[asset_cfg.name]
+    action = env.action_manager.action[:, asset_cfg.joint_ids]
+    return torch.cat([asset.data.joint_pos[:, asset_cfg.joint_ids], action], dim=-1)
+
+def joint_vel_and_cmd_error(env: WalkingRobotEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
+    asset: Articulation = env.scene[asset_cfg.name]
+    action = env.action_manager.action[:, asset_cfg.joint_ids]
+    error = action - asset.data.joint_pos[:, asset_cfg.joint_ids]
+    return error

@@ -329,7 +329,7 @@ class CustomJointPositionAction(joint_actions.JointPositionAction):
         super().__init__(cfg, env)
         
         self.filtered_actions = torch.zeros_like(self.processed_actions)
-        N, Ts = 10, 0.001
+        N, Ts = 10, 0.005
         self.ctrl = INDI_BatchedPendulum(
             n_envs=self.num_envs, n_joints=self.action_dim, Ts=Ts,
             joint_bw_hz=15.0, fc_hz=20.0, fd_hz=35.0,
@@ -450,6 +450,9 @@ class WalkingRobotObservationsCfg(ObservationsCfg):
         base_height = ObservationTermCfg(func=mdp.base_pos_z)
         joint_acc = ObservationTermCfg(func=custom_mdp.joint_acc)
         joint_pos = ObservationTermCfg(func=mdp.joint_pos)
+        joint_cmd_pos = ObservationTermCfg(func=custom_mdp.joint_pos_and_cmd)
+        joint_cmd_pos_error = ObservationTermCfg(func=custom_mdp.joint_vel_and_cmd_error)
+
 
         def __post_init__(self):
             self.enable_corruption = False
@@ -489,8 +492,8 @@ class WalkingRobotEventCfg(EventCfg):
         self.add_base_mass = None
         self.push_robot.params = {
             "velocity_range": {
-                "x": [-1.5, 1.5],
-                "y": [-1.5, 1.5],
+                "x": [-1.0, 1.0],
+                "y": [-1.0, 1.0],
             }
         }
         self.push_robot.interval_range_s = (2.5, 2.5)
@@ -683,6 +686,8 @@ class WalkingRobotEnvCfg(LocomotionVelocityRoughEnvCfg):
 class WalkingRobotEnvPLayCfg(WalkingRobotEnvCfg):
     def __post_init__(self):
         super().__post_init__()
+
+        self.sim.render_interval = 8
 
         self.observations.policy.enable_corruption = False
 
