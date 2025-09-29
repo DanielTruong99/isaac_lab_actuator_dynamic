@@ -365,22 +365,42 @@ class CustomJointPositionAction(joint_actions.JointPositionAction):
         self.action_filter_2.reset(shape=(self.num_envs, self.action_dim), value=0.0, device=self.device)
         self.filtered_actions_2 = torch.zeros_like(self.processed_actions)
 
-    def apply_actions(self):
+        self.counter = 0
+        self.is_first = True
+        self.max_counter = 5.0 / 0.001
+        self.my_action = torch.zeros_like(self.processed_actions)
 
-        # q_cmd = torch.zeros_like(self.processed_actions)
+    def apply_actions(self):
+        # if self.is_first:
+        #     first_q_meas = torch.zeros_like(self.processed_actions)
+        #     self.my_action = self._asset.data.joint_pos.clone()
+
+        #     q_cmd = torch.zeros_like(self.processed_actions)
+        #     q_cmd[:,4] = 0.2; q_cmd[:,5] = 0.2
+        #     q_cmd[:,6] = -0.34; q_cmd[:,7] = -0.34
+        #     q_cmd[:,8] = 0.2; q_cmd[:,9] = 0.2
+
+        #     self.is_first = False
+
+        # alpha = 0.9999
+        # self.counter += 1
+        # if self.counter >= self.max_counter:
+        #     self.counter = self.max_counter
+        # self.my_action = alpha * self.my_action + (1-alpha) * q_cmd
+        
         self.filtered_actions_2 = self.action_filter_2(self.processed_actions).clone()
 
         # get q_meas, qd_meas
         q_meas = self._asset.data.joint_pos
         qd_meas = self._asset.data.joint_vel
         self.filtered_joint_acc = self._asset.data.joint_acc     
-        self.filtered_joint_acc = self.joint_acc_filter(self.filtered_joint_acc).clone()    
-        self.filtered_actions, _, _ = self.ctrl.step(self.filtered_actions_2, q_meas, qd_meas, self.filtered_joint_acc)
-        self.filtered_actions = self.action_filter(self.filtered_actions).clone()
+        # self.filtered_joint_acc = self.joint_acc_filter(self.filtered_joint_acc).clone()    
+        self.filtered_actions, _, _ = self.ctrl.step(self.processed_actions, q_meas, qd_meas, self.filtered_joint_acc)
+        # self.filtered_actions = self.action_filter(self.filtered_actions).clone()
 
       
         self._asset.set_joint_effort_target(self.filtered_actions, joint_ids=self._joint_ids)
-        # self._asset.set_joint_position_target(self.filtered_actions_2, joint_ids=self._joint_ids)
+        # self._asset.set_joint_position_target(self.processed_actions, joint_ids=self._joint_ids)
 
     def reset(self, env_ids) -> None:
         self._raw_actions[env_ids] = 0.0
@@ -389,12 +409,40 @@ class CustomJointPositionAction(joint_actions.JointPositionAction):
         self.joint_acc_filter.reset(shape=(self.num_envs, self.action_dim), value=0.0, device=self.device)
         self.action_filter.reset(shape=(self.num_envs, self.action_dim), value=0.0, device=self.device)
         self.action_filter_2.reset(shape=(self.num_envs, self.action_dim), value=0.0, device=self.device)
+        self.is_first = True
+        self.counter = 0
+        self.my_action = torch.zeros_like(self.processed_actions)
+
+class Custom2JointPositionAction(joint_actions.JointPositionAction):
+    def __init__(self, cfg, env):
+        # initialize the action term
+        super().__init__(cfg, env)
+        # use default joint positions as offset
+        # if cfg.use_default_offset:
+        #     self._offset = self._asset.data.default_joint_pos[:, self._joint_ids].clone()
+        #     self._offset[:, 4] = 0.51; self._offset[:, 5] = 0.51
+        #     self._offset[:, 6] = -0.85; self._offset[:, 7] = -0.85
+        #     self._offset[:, 8] = 0.6; self._offset[:, 9] = 0.6
+
+        self.filtered_actions = torch.zeros_like(self.processed_actions)
+
+    def apply_actions(self):
+
+        alpha = 0.0
+        self.filtered_actions = alpha * self.filtered_actions + (1- alpha) * self.processed_actions
+        self._asset.set_joint_position_target(self.filtered_actions, joint_ids=self._joint_ids)
+
+    def reset(self, env_ids) -> None:
+        self.filtered_actions[env_ids] = 0.0
+
+
 
 @configclass
 class Actions2PlayCfg:
     """Action specifications for the MDP."""
 
     joint_pos = mdp.JointPositionActionCfg(class_type=CustomJointPositionAction, asset_name="robot", joint_names=[".*"], scale=1.0, use_default_offset=False)
+    # joint_pos = mdp.JointPositionActionCfg(class_type=Custom2JointPositionAction, asset_name="robot", joint_names=[".*"], scale=1.0, use_default_offset=True)
 
 @configclass
 class WalkingRobotObservationsCfg(ObservationsCfg):
@@ -469,8 +517,9 @@ class WalkingRobotObservationsCfg(ObservationsCfg):
         base_height = ObservationTermCfg(func=mdp.base_pos_z)
         joint_acc = ObservationTermCfg(func=custom_mdp.joint_acc)
         joint_pos = ObservationTermCfg(func=mdp.joint_pos)
-        joint_cmd_pos = ObservationTermCfg(func=custom_mdp.joint_pos_and_cmd)
-        joint_cmd_pos_error = ObservationTermCfg(func=custom_mdp.joint_vel_and_cmd_error)
+        joint_vel = ObservationTermCfg(func=mdp.joint_vel)
+        # joint_cmd_pos = ObservationTermCfg(func=custom_mdp.joint_pos_and_cmd)
+        # joint_cmd_pos_error = ObservationTermCfg(func=custom_mdp.joint_vel_and_cmd_error)
 
 
         def __post_init__(self):
@@ -506,9 +555,10 @@ class WalkingRobotEventCfg(EventCfg):
 
         '''
         self.physics_material.params["dynamic_friction_range"] = [0.9, 1.25]
-        # self.physics_material = None
-        self.add_base_mass.params["mass_distribution_params"] = [-1.0, 5.0]
-        # self.add_base_mass = None
+        self.physics_material = None
+        # self.base_com = None
+        # self.add_base_mass.params["mass_distribution_params"] = [-5.0, 10.0]
+        self.add_base_mass = None
         self.push_robot.params = {
             "velocity_range": {
                 "x": [-1.0, 1.0],
@@ -707,10 +757,19 @@ class WalkingRobotEnvPLayCfg(WalkingRobotEnvCfg):
         super().__post_init__()
 
         # self.sim.render_interval = 8
+        self.episode_length_s = 20.0
+        self.sim.dt = 0.001
+        self.decimation = 20
+        self.sim.render_interval = self.decimation
 
         # self.observations.policy.enable_corruption = False
 
-        # self.events.add_base_mass = None #type: ignore
+        # self.events.add_base_mass = 
+        self.events.base_com.params = {
+            "asset_cfg": SceneEntityCfg("robot", body_names="base"),
+            "com_range": {"x": (-0.2, -0.2), "y": (-0.00, 0.00), "z": (-0.00, 0.00)},
+        }
+        self.events.base_com = None #type: ignore
         self.events.base_external_force_torque = None
         self.events.push_robot = None #type: ignore
         # self.events.reset_base = None #type: ignore
@@ -731,8 +790,8 @@ class WalkingRobotEnvPLayCfg(WalkingRobotEnvCfg):
         self.scene.terrain.terrain_generator.curriculum = False #type: ignore
         self.curriculum.terrain_levels = None #type: ignore
 
-        self.commands.base_velocity.ranges.lin_vel_x = (0.7, 0.7)
-        self.commands.base_velocity.ranges.lin_vel_y = (-0.01, -0.01)
+        self.commands.base_velocity.ranges.lin_vel_x = (0.0, 0.0)
+        self.commands.base_velocity.ranges.lin_vel_y = (-0.00, -0.00)
         self.commands.base_velocity.ranges.ang_vel_z = (-0.0, 0.0)
    
 

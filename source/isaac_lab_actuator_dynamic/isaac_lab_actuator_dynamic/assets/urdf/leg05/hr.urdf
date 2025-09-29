@@ -98,7 +98,7 @@
     <limit
       lower="-1.5"
       upper="1.5"
-      effort="300"
+      effort="125"
       velocity="50" />
   </joint>
   <link
@@ -154,9 +154,9 @@
     <axis
       xyz="1 0 0" />
     <limit
-      lower="-0.5"
+      lower="-0.26"
       upper="0.65"
-      effort="300"
+      effort="125"
       velocity="50" />
   </joint>
   <link
@@ -211,9 +211,9 @@
     <axis
       xyz="0 1 0" />
     <limit
-      lower="-1.26"
-      upper="0.8"
-      effort="300"
+      lower="-1.25"
+      upper="1.1"
+      effort="125"
       velocity="50" />
   </joint>
   <link
@@ -270,7 +270,7 @@
     <limit
       lower="-1.571"
       upper="0.529"
-      effort="300"
+      effort="105"
       velocity="50" />
   </joint>
   <link
@@ -326,9 +326,9 @@
     <axis
       xyz="0 1 0" />
     <limit
-      lower="-0.8"
-      upper="0.8"
-      effort="100"
+      lower="-0.3"
+      upper="1.6"
+      effort="30"
       velocity="50" />
   </joint>
   <link name="L_end_effector">
@@ -414,7 +414,7 @@
     <limit
       lower="-1.5"
       upper="1.5"
-      effort="300"
+      effort="125"
       velocity="50" />
   </joint>
   <link
@@ -471,8 +471,8 @@
       xyz="1 0 0" />
     <limit
       lower="-0.65"
-      upper="0.5"
-      effort="300"
+      upper="0.26"
+      effort="125"
       velocity="50" />
   </joint>
   <link
@@ -527,9 +527,9 @@
     <axis
       xyz="0 1 0" />
     <limit
-      lower="-1.76"
-      upper="0.78"
-      effort="300"
+      lower="-1.25"
+      upper="1.1"
+      effort="125"
       velocity="50" />
   </joint>
   <link
@@ -586,7 +586,7 @@
     <limit
       lower="-1.571"
       upper="0.529"
-      effort="300"
+      effort="105"
       velocity="50" />
   </joint>
   <link
@@ -642,9 +642,9 @@
     <axis
       xyz="0 1 0" />
     <limit
-      lower="-0.8"
-      upper="0.8"
-      effort="100"
+      lower="-0.3"
+      upper="1.6"
+      effort="30"
       velocity="50" />
   </joint>
   <link name="R_end_effector">
