@@ -33,22 +33,14 @@ class MotionLoader:
             dof_velocities = []
             dof_efforts = []
             dof_position_commands = []
-            motion_dt = []
-            motion_duration = []
-            motion_num_frames = []
             for index, mf in enumerate(motion_file):
-                data_list.append(np.load(mf, allow_pickle=True))
+                data_list.append(np.load(mf))
                 dof_names.append(data_list[index]["dof_names"].tolist())
                 fps.append(data_list[index]["fps"])
                 dof_positions.append(data_list[index]["dof_positions"])
                 dof_velocities.append(data_list[index]["dof_velocities"])
                 dof_efforts.append(data_list[index]["dof_efforts"])
                 dof_position_commands.append(data_list[index]["dof_position_commands"])
-
-                motion_num_frames.append(data_list[index]["dof_positions"].shape[0])
-                motion_dt.append(1.0 / fps[index])
-                motion_duration.append(motion_dt[index] * (motion_num_frames[index] - 1))
-            dof_names = dof_names[0]
         else:
             assert os.path.isfile(motion_file), f"Invalid file path: {motion_file}"
             data = np.load(motion_file)
@@ -62,27 +54,15 @@ class MotionLoader:
         self.device = device
         self._dof_names = dof_names
 
-        self.dof_positions = torch.from_numpy(np.concatenate(dof_positions, axis=0)).to(device=self.device, dtype=torch.float32)
-        self.dof_velocities = torch.from_numpy(np.concatenate(dof_velocities, axis=0)).to(device=self.device, dtype=torch.float32)
-        self.dof_efforts = torch.from_numpy(np.concatenate(dof_efforts, axis=0)).to(device=self.device, dtype=torch.float32)
-        self.dof_position_commands = torch.from_numpy(np.concatenate(dof_position_commands, axis=0)).to(device=self.device, dtype=torch.float32)
+        self.dof_positions = torch.tensor(dof_positions, dtype=torch.float32, device=self.device)
+        self.dof_velocities = torch.tensor(dof_velocities, dtype=torch.float32, device=self.device)
+        self.dof_efforts = torch.tensor(dof_efforts, dtype=torch.float32, device=self.device)
+        self.dof_position_commands = torch.tensor(dof_position_commands, dtype=torch.float32, device=self.device)
 
-        #! Temporary fix
-        self.dof_positions = self.dof_positions[:, :5]
-        self.dof_velocities = self.dof_velocities[:, :5]
-        self.dof_efforts = self.dof_efforts[:, :5]
-        self.dof_position_commands = self.dof_position_commands[:, :5]
-
-        self.dt = torch.tensor(motion_dt, dtype=torch.float32, device=self.device)
-        self.num_frames = torch.tensor(motion_num_frames, dtype=torch.int32, device=self.device)
-        self.duration = torch.tensor(motion_duration, dtype=torch.float32, device=self.device)
-        self.num_motions = self.num_frames.shape[0]
-
-        self.start_motion_ids = self.num_frames.roll(1)
-        self.start_motion_ids[0] = 0
-        self.start_motion_ids = self.start_motion_ids.cumsum(0)
-
-        print(f"Motion loaded: duration: {self.duration.sum()} sec, frames: {self.num_frames.sum()}")
+        self.dt = 1.0 / fps
+        self.num_frames = self.dof_positions.shape[0]
+        self.duration = self.dt * (self.num_frames - 1)
+        print(f"Motion loaded ({motion_file}): duration: {self.duration} sec, frames: {self.num_frames}")
 
     @property
     def dof_names(self) -> list[str]:
@@ -187,17 +167,24 @@ class MotionLoader:
         new_q = torch.where(torch.abs(cos_half_theta) >= 1, q0, new_q)
         return new_q
 
-    def _compute_frame_blend(self, time, len, num_frames, dt):
-        phase = time / len
-        phase = torch.clip(phase, 0.0, 1.0)
+    def _compute_frame_blend(self, times: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Compute the indexes of the first and second values, as well as the blending time
+        to interpolate between them and the given times.
 
-        frame_idx0 = (phase * (num_frames - 1)).long()
-        frame_idx1 = torch.min(frame_idx0 + 1, num_frames - 1)
-        blend = (time - frame_idx0 * dt) / dt
+        Args:
+            times: Times, between 0 and motion duration, to sample motion values.
+                Specified times will be clipped to fall within the range of the motion duration.
 
-        return frame_idx0, frame_idx1, blend
+        Returns:
+            First value indexes, Second value indexes, and blending time between 0 (first value) and 1 (second value).
+        """
+        phase = np.clip(times / self.duration, 0.0, 1.0)
+        index_0 = (phase * (self.num_frames - 1)).round(decimals=0).astype(int)
+        index_1 = np.minimum(index_0 + 1, self.num_frames - 1)
+        blend = ((times - index_0 * self.dt) / self.dt).round(decimals=5)
+        return index_0, index_1, blend
 
-    def sample_times(self, motion_ids):
+    def sample_times(self, num_samples: int, duration: float | None = None) -> np.ndarray:
         """Sample random motion times uniformly.
 
         Args:
@@ -211,23 +198,37 @@ class MotionLoader:
         Returns:
             Time samples, between 0 and the specified/motion duration.
         """
-        phase = torch.rand(motion_ids.shape, device=self.device)
-        duration = self.duration[motion_ids]
-        return duration * phase
+        duration = self.duration if duration is None else duration
+        assert (
+            duration <= self.duration
+        ), f"The specified duration ({duration}) is longer than the motion duration ({self.duration})"
+        return duration * np.random.uniform(low=0.0, high=1.0, size=num_samples)
 
-    def sample(self, motion_ids, motion_times):
-        motion_len = self.duration[motion_ids]
-        num_frames = self.num_frames[motion_ids]
-        dt = self.dt[motion_ids]
+    def sample(
+        self, num_samples: int, times: Optional[np.ndarray] = None, duration: float | None = None
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Sample motion data.
 
-        index_0, index_1, blend = self._compute_frame_blend(motion_times, motion_len, num_frames, dt)
-        index_0 = index_0 + self.start_motion_ids[motion_ids]
-        index_1 = index_1 + self.start_motion_ids[motion_ids]
+        Args:
+            num_samples: Number of time samples to generate. If ``times`` is defined, this parameter is ignored.
+            times: Motion time used for sampling.
+                If not defined, motion data will be random sampled uniformly in time.
+            duration: Maximum motion duration to sample.
+                If not defined, samples will be within the range of the motion duration.
+                If ``times`` is defined, this parameter is ignored.
+
+        Returns:
+            Sampled motion DOF positions (with shape (N, num_dofs)), DOF velocities (with shape (N, num_dofs)),
+            body positions (with shape (N, num_bodies, 3)), body rotations (with shape (N, num_bodies, 4), as wxyz quaternion),
+            body linear velocities (with shape (N, num_bodies, 3)) and body angular velocities (with shape (N, num_bodies, 3)).
+        """
+        times = self.sample_times(num_samples, duration) if times is None else times
+        index_0, index_1, blend = self._compute_frame_blend(times)
+        blend = torch.tensor(blend, dtype=torch.float32, device=self.device)
 
         return (
             self._interpolate(self.dof_positions, blend=blend, start=index_0, end=index_1),
             self._interpolate(self.dof_velocities, blend=blend, start=index_0, end=index_1),
-            self._interpolate(self.dof_position_commands, blend=blend, start=index_0, end=index_1),
             self._interpolate(self.dof_efforts, blend=blend, start=index_0, end=index_1),
         )
 

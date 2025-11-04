@@ -8,16 +8,13 @@ from __future__ import annotations
 import os
 from dataclasses import MISSING
 
-from isaac_lab_actuator_dynamic.assets import LEGACTUATORDYNAMIC_CFG, LEGACTUATORDYNAMIC_2_CFG, LEGWALKING_HIGH_GAIN_AMARTURE_CFG
+from isaac_lab_actuator_dynamic.assets import LEGACTUATORDYNAMIC_CFG, LEGACTUATORDYNAMIC_2_CFG
 
 from isaaclab.actuators import ImplicitActuatorCfg
 from isaaclab.assets import ArticulationCfg
 from isaaclab.envs import DirectRLEnvCfg
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sim import PhysxCfg, SimulationCfg
-# from isaaclab.sim import SimulationCfg
-# from isaaclab.sim._impl.newton_manager_cfg import NewtonCfg
-# from isaaclab.sim._impl.solvers_cfg import MJWarpSolverCfg
 from isaaclab.utils import configclass
 
 MOTIONS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "motions")
@@ -40,7 +37,7 @@ class RandomScaleCfg:
     }
 
 @configclass
-class ActuatorDynamic2EnvCfg(DirectRLEnvCfg):
+class ActuatorDynamicChirpEnvCfg(DirectRLEnvCfg):
     """Actuator Dynamic AMP environment config (base class)."""
 
     # rewards
@@ -91,9 +88,8 @@ class ActuatorDynamic2EnvCfg(DirectRLEnvCfg):
     random_scale_cfg = RandomScaleCfg()
 
     # simulation
-    # PhysX
     sim: SimulationCfg = SimulationCfg(
-        dt=0.001,
+        dt=0.005,
         render_interval=decimation,
         physx=PhysxCfg(
             gpu_found_lost_pairs_capacity=2**23,
@@ -101,33 +97,14 @@ class ActuatorDynamic2EnvCfg(DirectRLEnvCfg):
         ),
     )
 
-    # # Newton
-    # sim: SimulationCfg = SimulationCfg(
-    #     dt=0.001,
-    #     render_interval=decimation,
-    #     newton_cfg=NewtonCfg(
-    #         solver_cfg=MJWarpSolverCfg(
-    #             njmax=210,
-    #             ncon_per_env=35,
-    #             ls_iterations=10,
-    #             ls_parallel=True,
-    #             cone="pyramidal",
-    #             impratio=1,
-    #             integrator="implicit",
-    #         ),
-    #         num_substeps=1,
-    #         debug_mode=False,
-    #     )
-    # )
-
     # scene
     scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=4096, env_spacing=10.0, replicate_physics=True)
 
     # robot
-    robot: ArticulationCfg = LEGWALKING_HIGH_GAIN_AMARTURE_CFG.replace(prim_path="/World/envs/env_.*/Robot") # type: ignore
+    robot: ArticulationCfg = LEGACTUATORDYNAMIC_2_CFG.replace(prim_path="/World/envs/env_.*/Robot") # type: ignore
 
 @configclass
-class ActuatorDynamic2PlayEnvCfg(ActuatorDynamic2EnvCfg):
+class ActuatorDynamicChirpPlayEnvCfg(ActuatorDynamicChirpEnvCfg):
     def __post_init__(self) -> None:
         # post init of parent
         super().__post_init__()
@@ -136,5 +113,5 @@ class ActuatorDynamic2PlayEnvCfg(ActuatorDynamic2EnvCfg):
         self.reset_strategy = "random-start"
         self.randomize_initial_state = False
         self.episode_length_s = 30
-        self.motion_file = [os.path.join(MOTIONS_DIR, "recorded_left_leg_1.npz")]
+        self.motion_file = [os.path.join(MOTIONS_DIR, "recorded_real_motor_data_2.npz")]
 

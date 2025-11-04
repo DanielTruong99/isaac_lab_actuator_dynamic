@@ -36,9 +36,9 @@ class ActuatorDynamicPPORunnerCfg(RslRlOnPolicyRunnerCfg):
         max_grad_norm=1.0,
     )
 
-    resume = True
-    load_run = "2025-08-31_13-28-19"
-    load_checkpoint = "model_41800.pt"
+    # resume = True
+    # load_run = "2025-08-31_13-28-19"
+    # load_checkpoint = "model_41800.pt"
     
 
 

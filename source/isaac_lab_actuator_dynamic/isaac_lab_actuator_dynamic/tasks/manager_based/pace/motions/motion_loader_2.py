@@ -68,6 +68,7 @@ class MotionLoader:
         self.dof_position_commands = torch.from_numpy(np.concatenate(dof_position_commands, axis=0)).to(device=self.device, dtype=torch.float32)
 
         #! Temporary fix
+        # self._dof_names = self._dof_names[:5]
         self.dof_positions = self.dof_positions[:, :5]
         self.dof_velocities = self.dof_velocities[:, :5]
         self.dof_efforts = self.dof_efforts[:, :5]

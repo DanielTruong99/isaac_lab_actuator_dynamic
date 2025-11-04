@@ -8,6 +8,7 @@ from __future__ import annotations
 import gymnasium as gym
 import numpy as np
 import torch
+import math
 
 import isaaclab.sim as sim_utils
 from isaaclab.assets import Articulation
@@ -15,14 +16,14 @@ from isaaclab.envs import DirectRLEnv, VecEnvStepReturn
 from isaaclab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
 from isaaclab.utils.math import quat_rotate, quat_apply
 
-from .actuator_dynamic_env_cfg import ActuatorDynamic2EnvCfg
+from .actuator_dynamic_chirp_env_cfg import ActuatorDynamicChirpEnvCfg
 from .motions import MotionLoader
 
 
-class ActuatorDynamic2Env(DirectRLEnv):
-    cfg: ActuatorDynamic2EnvCfg
+class ActuatorDynamicChirpEnv(DirectRLEnv):
+    cfg: ActuatorDynamicChirpEnvCfg
 
-    def __init__(self, cfg: ActuatorDynamic2EnvCfg, render_mode: str | None = None, **kwargs):
+    def __init__(self, cfg: ActuatorDynamicChirpEnvCfg, render_mode: str | None = None, **kwargs):
         super().__init__(cfg, render_mode, **kwargs)
 
         self.action_offset = 0.0
@@ -200,8 +201,17 @@ class ActuatorDynamic2Env(DirectRLEnv):
         # target = self.actions
         # self.robot.set_joint_effort_target(self.dof_efforts, self.key_joint_indexes)
 
+        joint_pos_cmds = chirp_5d(
+            t=self.episode_length_buf * 0.005,
+            T=20.0,
+            f0=0.1,
+            fT=8.0,
+            Amin=torch.tensor([-0.1, -0.2, 0.3, -1.3, 0.25]),
+            Amax=torch.tensor([0.1, 0.2, 0.95, -0.7, 0.7]),
+        )
+
         # get joint positions cmds from motion loader to feed into this one
-        self.robot.set_joint_position_target(self.joint_pos_cmds, self.key_joint_indexes)
+        self.robot.set_joint_position_target(joint_pos_cmds[0], self.key_joint_indexes)
         # self.robot.set_joint_position_target(self.default_r_joints, self.r_joint_ids)
 
     def _get_observations(self) -> dict:
@@ -278,7 +288,7 @@ class ActuatorDynamic2Env(DirectRLEnv):
         time_out = self.episode_length_buf >= self.max_episode_length - 1 
         # time out by end of reference motions
         current_times = self.episode_length_buf * self._motion_loader.dt[self._motion_ids]
-        time_out = torch.logical_or(time_out, current_times >= self._motion_loader.duration[self._motion_ids])
+        # time_out = torch.logical_or(time_out, current_times >= self._motion_loader.duration[self._motion_ids])
         if self.cfg.early_termination:
             # died = self.robot.data.body_pos_w[:, self.ref_body_index, 2] < self.cfg.termination_height
             # check dof position limits
@@ -383,8 +393,92 @@ class ActuatorDynamic2Env(DirectRLEnv):
 
 
 
-class ActuatorDynamic2PlayEnv(ActuatorDynamic2Env):
+class ActuatorDynamicChirpPlayEnv(ActuatorDynamicChirpEnv):
     pass
+
+def chirp_5d(
+    t,                  # (N,) or (B,N) time in seconds
+    T,                  # scalar duration (seconds)
+    f0, fT,             # scalars: start/end freq in Hz
+    Amin, Amax,         # (..., 5): per-DoF min/max (broadcastable to batch)
+    phase0=0.0,         # scalar initial phase (rad)
+    clamp_time=True,
+    return_derivatives=False,
+):
+    """
+    PyTorch chirp that outputs a 5-DoF signal bounded by [Amin, Amax] element-wise.
+
+    Shapes:
+      - t: (N,) or (B, N)
+      - Amin, Amax: (5,) or (B,5) or broadcastable to (B,5)
+    Returns:
+      pos: (B, N, 5)
+      (optionally) vel, acc with same shape
+    """
+    # Ensure tensors
+    t = torch.as_tensor(t)
+    device = t.device
+    dtype = t.dtype
+
+    # Make batch/time dims explicit
+    if t.ndim == 1:
+        t = t.unsqueeze(0)             # (1, N)
+    B, N = t.shape
+
+    Amin = torch.as_tensor(Amin, device=device, dtype=dtype)
+    Amax = torch.as_tensor(Amax, device=device, dtype=dtype)
+
+    # Broadcast Amin/Amax to (B, 5)
+    Amin = Amin.expand(B, -1) if Amin.ndim == 2 else Amin.reshape(1, -1).expand(B, -1)
+    Amax = Amax.expand(B, -1) if Amax.ndim == 2 else Amax.reshape(1, -1).expand(B, -1)
+
+    # Precompute mid/span per DoF  → shape (B,1,5) to broadcast over time
+    Amid = 0.5 * (Amax + Amin)        # (B,5)
+    Aspan = 0.5 * (Amax - Amin)       # (B,5)
+    Amid  = Amid.unsqueeze(1)         # (B,1,5)
+    Aspan = Aspan.unsqueeze(1)        # (B,1,5)
+
+    # Normalize time and optional clamp to [0, T]
+    if clamp_time:
+        t_clamped = t.clamp(min=0.0, max=T)
+    else:
+        t_clamped = t
+
+    # Linear frequency sweep f(t) = f0 + (fT-f0)*(t/T)
+    f0 = torch.as_tensor(f0, device=device, dtype=dtype)
+    fT = torch.as_tensor(fT, device=device, dtype=dtype)
+    T  = torch.as_tensor(T,  device=device, dtype=dtype)
+
+    tau = t_clamped / T                          # (B,N)
+    f_t = f0 + (fT - f0) * tau                   # (B,N)
+
+    # Phase φ(t) = 2π ( f0 t + 0.5*(fT-f0)/T * t^2 ) + phase0
+    phi = 2.0 * math.pi * (f0 * t_clamped + 0.5 * (fT - f0) * (t_clamped**2) / T) \
+          + torch.as_tensor(phase0, device=device, dtype=dtype)   # (B,N)
+
+    # Core sinusoid
+    s = torch.sin(phi).unsqueeze(-1)             # (B,N,1)
+
+    # Position in bounds [Amin, Amax] per DoF:
+    pos = Amid + Aspan * s                       # (B,N,5)
+
+    if not return_derivatives:
+        return pos
+
+    # Derivatives:
+    # dφ/dt = 2π f(t)
+    dphi_dt = (2.0 * math.pi * f_t).unsqueeze(-1)        # (B,N,1)
+    # vel = d/dt [Amid + Aspan*sin(φ)] = Aspan*cos(φ)*dφ/dt
+    vel = Aspan * torch.cos(phi).unsqueeze(-1) * dphi_dt # (B,N,5)
+    # acc = Aspan * [ -sin(φ)*(dφ/dt)^2 + cos(φ)*d^2φ/dt^2 ]
+    # For linear f(t): d^2φ/dt^2 = 2π * df/dt = 2π * (fT-f0)/T
+    d2phi_dt2 = 2.0 * math.pi * (fT - f0) / T
+    acc = Aspan * (
+        -torch.sin(phi).unsqueeze(-1) * (dphi_dt ** 2)
+        + torch.cos(phi).unsqueeze(-1) * d2phi_dt2
+    )                                                 # (B,N,5)
+
+    return pos, vel, acc
 
 @torch.jit.script
 def quaternion_to_tangent_and_normal(q: torch.Tensor) -> torch.Tensor:

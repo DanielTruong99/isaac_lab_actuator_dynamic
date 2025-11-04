@@ -24,6 +24,9 @@ parser.add_argument(
 )
 parser.add_argument("--num_envs", type=int, default=None, help="Number of environments to simulate.")
 parser.add_argument("--task", type=str, default=None, help="Name of the task.")
+parser.add_argument(
+    "--agent", type=str, default="rsl_rl_cfg_entry_point", help="Name of the RL agent configuration entry point."
+)
 parser.add_argument("--seed", type=int, default=None, help="Seed used for the environment")
 parser.add_argument(
     "--use_pretrained_checkpoint",
@@ -31,6 +34,7 @@ parser.add_argument(
     help="Use the pre-trained checkpoint from Nucleus.",
 )
 parser.add_argument("--real-time", action="store_true", default=False, help="Run in real-time, if possible.")
+parser.add_argument("--newton_visualizer", action="store_true", default=False, help="Enable Newton rendering.")
 # append RSL-RL cli arguments
 cli_args.add_rsl_rl_args(parser)
 # append AppLauncher cli args
@@ -44,6 +48,7 @@ if args_cli.video:
 # clear out sys.argv for Hydra
 sys.argv = [sys.argv[0]] + hydra_args
 
+
 # launch omniverse app
 app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
@@ -56,58 +61,43 @@ import time
 import torch
 import matplotlib.pyplot as plt
 import numpy as np
+from rsl_rl.runners import DistillationRunner, OnPolicyRunner
 
-from rsl_rl.runners import OnPolicyRunner
+from isaaclab.utils.timer import Timer
 
-from isaaclab.envs import (
-    DirectMARLEnv,
-    DirectMARLEnvCfg,
-    DirectRLEnvCfg,
-    ManagerBasedRLEnvCfg,
-    multi_agent_to_single_agent,
-)
+Timer.enable = False
+Timer.enable_display_output = False
+
+from isaaclab.envs import DirectRLEnvCfg, ManagerBasedRLEnvCfg
 from isaaclab.utils.assets import retrieve_file_path
 from isaaclab.utils.dict import print_dict
 from isaaclab.utils.pretrained_checkpoint import get_published_pretrained_checkpoint
 
-from isaaclab_rl.rsl_rl import RslRlOnPolicyRunnerCfg, RslRlVecEnvWrapper, export_policy_as_jit, export_policy_as_onnx
+from isaaclab_rl.rsl_rl import RslRlBaseRunnerCfg, RslRlVecEnvWrapper, export_policy_as_jit, export_policy_as_onnx
 
 import isaaclab_tasks  # noqa: F401
 from isaaclab_tasks.utils import get_checkpoint_path
 from isaaclab_tasks.utils.hydra import hydra_task_config
-import isaac_lab_actuator_dynamic.tasks  # noqa: F401
+
 # PLACEHOLDER: Extension template (do not remove this comment)
+import isaac_lab_actuator_dynamic.tasks  # noqa: F401
 
-# from isaacsim.core.utils.extensions import enable_extension
-# enable_extension("isaacsim.ros2.bridge")
-# simulation_app.update()
-
-
-# import rclpy
-# from sensor_msgs.msg import JointState
-
-# rclpy.init()
-# node = rclpy.create_node('Humanoid_HWITL')
-# pub_joint_states = node.create_publisher(JointState, '/joint_states', 10)
-# pub_joint_cmds = node.create_publisher(JointState, '/joint_cmds', 10)
-# joint_states_msg = JointState()
-# joint_cmds_msg = JointState()
-
-@hydra_task_config(args_cli.task, "rsl_rl_cfg_entry_point")
-def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agent_cfg: RslRlOnPolicyRunnerCfg):
+@hydra_task_config(args_cli.task, args_cli.agent)
+def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg, agent_cfg: RslRlBaseRunnerCfg):
     """Play with RSL-RL agent."""
     # grab task name for checkpoint path
     task_name = args_cli.task.split(":")[-1]
     train_task_name = task_name.replace("-Play", "")
 
     # override configurations with non-hydra CLI arguments
-    agent_cfg = cli_args.update_rsl_rl_cfg(agent_cfg, args_cli)
+    agent_cfg: RslRlBaseRunnerCfg = cli_args.update_rsl_rl_cfg(agent_cfg, args_cli)
     env_cfg.scene.num_envs = args_cli.num_envs if args_cli.num_envs is not None else env_cfg.scene.num_envs
 
     # set the environment seed
     # note: certain randomizations occur in the environment initialization so we set the seed here
     env_cfg.seed = agent_cfg.seed
     env_cfg.sim.device = args_cli.device if args_cli.device is not None else env_cfg.sim.device
+    env_cfg.sim.enable_newton_rendering = args_cli.newton_visualizer
 
     # specify directory for logging experiments
     log_root_path = os.path.join("logs", "rsl_rl", agent_cfg.experiment_name)
@@ -125,12 +115,24 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
     log_dir = os.path.dirname(resume_path)
 
+    # set the log directory for the environment (works for all environment types)
+    env_cfg.log_dir = log_dir
+
+    # Set play mode for Newton viewer if using Newton visualizer
+    if args_cli.newton_visualizer:
+        # Set visualizer to play mode in Newton config
+        if hasattr(env_cfg.sim, "newton_cfg"):
+            env_cfg.sim.newton_cfg.visualizer_train_mode = False
+        else:
+            # Create newton_cfg if it doesn't exist
+            from isaaclab.sim._impl.newton_manager_cfg import NewtonCfg
+
+            newton_cfg = NewtonCfg()
+            newton_cfg.visualizer_train_mode = False
+            env_cfg.sim.newton_cfg = newton_cfg
+
     # create isaac environment
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
-
-    # convert to single-agent instance if required by the RL algorithm
-    if isinstance(env.unwrapped, DirectMARLEnv):
-        env = multi_agent_to_single_agent(env)
 
     # wrap for video recording
     if args_cli.video:
@@ -149,30 +151,41 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
     print(f"[INFO]: Loading model checkpoint from: {resume_path}")
     # load previously trained model
-    ppo_runner = OnPolicyRunner(env, agent_cfg.to_dict(), log_dir=None, device=agent_cfg.device)
-    ppo_runner.load(resume_path)
+    if agent_cfg.class_name == "OnPolicyRunner":
+        runner = OnPolicyRunner(env, agent_cfg.to_dict(), log_dir=None, device=agent_cfg.device)
+    elif agent_cfg.class_name == "DistillationRunner":
+        runner = DistillationRunner(env, agent_cfg.to_dict(), log_dir=None, device=agent_cfg.device)
+    else:
+        raise ValueError(f"Unsupported runner class: {agent_cfg.class_name}")
+    runner.load(resume_path)
 
     # obtain the trained policy for inference
-    policy = ppo_runner.get_inference_policy(device=env.unwrapped.device)
+    policy = runner.get_inference_policy(device=env.unwrapped.device)
 
     # extract the neural network module
     # we do this in a try-except to maintain backwards compatibility.
     try:
         # version 2.3 onwards
-        policy_nn = ppo_runner.alg.policy
+        policy_nn = runner.alg.policy
     except AttributeError:
         # version 2.2 and below
-        policy_nn = ppo_runner.alg.actor_critic
+        policy_nn = runner.alg.actor_critic
+
+    # extract the normalizer
+    if hasattr(policy_nn, "actor_obs_normalizer"):
+        normalizer = policy_nn.actor_obs_normalizer
+    elif hasattr(policy_nn, "student_obs_normalizer"):
+        normalizer = policy_nn.student_obs_normalizer
+    else:
+        normalizer = None
 
     # export policy to onnx/jit
     export_model_dir = os.path.join(os.path.dirname(resume_path), "exported")
-    # export_policy_as_jit(policy_nn, ppo_runner.obs_normalizer, path=export_model_dir, filename="policy.pt")
-    # export_policy_as_onnx(
-    #     policy_nn, normalizer=ppo_runner.obs_normalizer, path=export_model_dir, filename="policy.onnx"
-    # )
+    export_policy_as_jit(policy_nn, normalizer=normalizer, path=export_model_dir, filename="policy.pt")
+    export_policy_as_onnx(policy_nn, normalizer=normalizer, path=export_model_dir, filename="policy.onnx")
 
     dt = env.unwrapped.step_dt
-    
+
     # reset environment
     obs = env.get_observations()
     joint_data = []
@@ -183,10 +196,8 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     joint_pos_recorded = env.unwrapped.recorded_joint_pos.cpu().numpy().tolist()
     joint_pos_recorded_data += joint_pos_recorded
     timestep = 0
-
     residual_torque_data = []
     applied_torque_data = []
-    
     # simulate environment
     while simulation_app.is_running():
         start_time = time.time()
@@ -288,7 +299,6 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
             joint_data = []
             joint_cmd_data = []
-
         if args_cli.video:
             timestep += 1
             # Exit the play loop after recording one video

@@ -8,7 +8,7 @@ class WalkingRobotPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     num_steps_per_env = 24
     max_iterations = 100000
     save_interval = 500
-    experiment_name = "locomotion_robot"   
+    experiment_name = "pace"   
     empirical_normalization = False
 
     # resume = True

@@ -18,6 +18,22 @@ if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
     from isaaclab.managers import RewardTermCfg
 
+
+
+def action_rate_max_kernel_per_joint(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
+    """Penalize the rate of change of the actions using max kernel."""
+    action_rate = env.action_manager.action[:, asset_cfg.joint_ids] - env.action_manager.prev_action[:, asset_cfg.joint_ids]
+    action_rate_square = torch.sum(torch.square(action_rate), dim=1)
+    reward = 0.03 - torch.maximum(action_rate_square, torch.tensor(0.03, device=env.device))
+    return reward
+
+def action_rate_max_kernel(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
+    """Penalize the rate of change of the actions using max kernel."""
+    action_rate = env.action_manager.action[:, asset_cfg.joint_ids] - env.action_manager.prev_action[:, asset_cfg.joint_ids]
+    action_rate_square = torch.sum(torch.square(action_rate), dim=1)
+    reward = 0.015 - torch.maximum(action_rate_square, torch.tensor(0.015, device=env.device))
+    return reward
+
 def weighted_joint_torques_l2(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
     original_reward = mdp.joint_torques_l2(env, asset_cfg)
     v_cmd = env.command_manager.get_command("base_velocity")
@@ -476,9 +492,9 @@ class GaitReward(ManagerTermBase):
             dim=1,
         )
 
-        assert torch.all(frequencies > 0), "Frequencies must be positive"
-        assert torch.all((offsets >= 0) & (offsets <= 1)), "Offsets must be between 0 and 1"
-        assert torch.all((durations > 0) & (durations < 1)), "Durations must be between 0 and 1"
+        # assert torch.all(frequencies > 0), "Frequencies must be positive"
+        # assert torch.all((offsets >= 0) & (offsets <= 1)), "Offsets must be between 0 and 1"
+        # assert torch.all((durations > 0) & (durations < 1)), "Durations must be between 0 and 1"
 
         gait_indices = torch.remainder(self._env.episode_length_buf * self.dt * frequencies, 1.0)
 

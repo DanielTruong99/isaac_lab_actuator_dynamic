@@ -68,3 +68,6 @@ datasets
 tests/
 
 _isaac_lab
+
+source/isaac_lab_actuator_dynamic/isaac_lab_actuator_dynamic/tasks/manager_based/pace/motions/*.npz
+source/isaac_lab_actuator_dynamic/isaac_lab_actuator_dynamic/tasks/direct/actuator_dynamic/motions/*.npz

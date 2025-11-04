@@ -35,12 +35,23 @@ gym.register(
     },
 )
 
+
 gym.register(
     id="Isaac-Actuator-Dynamic-Direct-Play-v2",
     entry_point=f"{__name__}.actuator_dynamic_env:ActuatorDynamic2PlayEnv",
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": f"{__name__}.actuator_dynamic_env_cfg:ActuatorDynamic2PlayEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:ActuatorDynamicPPORunnerCfg",
+    },
+)
+
+gym.register(
+    id="Isaac-Actuator-Dynamic-Direct-Play-Chirp",
+    entry_point=f"{__name__}.actuator_dynamic_chirp_env:ActuatorDynamicChirpPlayEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.actuator_dynamic_chirp_env_cfg:ActuatorDynamicChirpPlayEnvCfg",
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:ActuatorDynamicPPORunnerCfg",
     },
 )
