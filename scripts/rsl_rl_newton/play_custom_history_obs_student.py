@@ -77,10 +77,11 @@ from isaaclab.utils.dict import print_dict
 from isaaclab.utils.pretrained_checkpoint import get_published_pretrained_checkpoint
 
 from isaaclab_rl.rsl_rl import RslRlBaseRunnerCfg, RslRlVecEnvWrapper, export_policy_as_jit, export_policy_as_onnx
-
+from isaac_lab_actuator_dynamic.assets import FLATFOOT_WITHPIN_HIGHGAIN_CFG, HIGHGAIN_ACTION_SCALE
 import isaaclab_tasks  # noqa: F401
 from isaaclab_tasks.utils import get_checkpoint_path
 from isaaclab_tasks.utils.hydra import hydra_task_config
+from isaaclab.utils.buffers import CircularBuffer
 
 # PLACEHOLDER: Extension template (do not remove this comment)
 import isaac_lab_actuator_dynamic.tasks  # noqa: F401
@@ -224,6 +225,11 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg, agent_cfg: RslRlBaseRun
     pre_state = "NONE"
     signal = "entry"
     prev_applied_torque = torch.zeros_like(asset.data.applied_torque, device=env.unwrapped.device)
+    circular_buffer_list = []
+    data_list = [None] * 8
+    for _ in range(8):
+        circular_buffer_list.append(CircularBuffer(max_len=10, batch_size=num_envs, device=env.unwrapped.device))
+
     # simulate environment
     while simulation_app.is_running():
         start_time = time.time()
@@ -251,7 +257,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg, agent_cfg: RslRlBaseRun
                 joint_pos_action._scale = 1.0
 
                 actions = torch.zeros((num_envs, asset.num_joints), device=env.unwrapped.device)
-                max_time = 0.1; max_counter = max_time / dt
+                max_time = 0.2; max_counter = max_time / dt
                 first_pos_cmd = torch.tensor([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], device=env.unwrapped.device)
                 first_pos_cmd = first_pos_cmd.repeat(num_envs, 1)
                 first_joint_pos = asset.data.joint_pos.clone()
@@ -276,30 +282,40 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg, agent_cfg: RslRlBaseRun
                 # asset.write_joint_damping_to_sim(dampings)
 
                 # modify joint position action settings, for policy output scaling
-                joint_pos_action._offset = torch.tensor([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], device=env.unwrapped.device)
-                joint_pos_action._scale = torch.tensor([0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25], device=env.unwrapped.device)
+                action_scales = [value for _, value in HIGHGAIN_ACTION_SCALE.items()]
+                joint_pos_action._offset = torch.tensor([0.0, 0.0, 0.65, -1.05, 0.4, 0.0, 0.0, 0.65, -1.05, 0.4], device=env.unwrapped.device)
+                joint_pos_action._scale = torch.tensor(action_scales, device=env.unwrapped.device)
 
                 # standing command
                 vel_cmds = torch.zeros((num_envs, 3), device=env.unwrapped.device)
                 gait_cmds = torch.tensor([0.0, 0.0, 1.0, 0.0], device=env.unwrapped.device) # freq, offset, duration
                 gait_cmds = gait_cmds.repeat(num_envs, 1)
-                counter_5s = 1.0 / dt
-                env.unwrapped.action_manager._terms["joint_pos"].alpha = 0.64  # fc = 3.5 hz
+                counter_5s = 3.0 / dt
+                env.unwrapped.action_manager._terms["joint_pos"].alpha = 0.45  # fc = 3.5 hz
                 # counter = 0
                 policy_counter = 0
+                filtered_vel_cmds = torch.zeros((num_envs, 3), device=env.unwrapped.device)
 
             if signal == "50hz_timeout":
                 if counter > counter_5s:
                     robot_orientation = asset.data.root_com_quat_w.clone()
                     yaw = torch.atan2(2.0 * (robot_orientation[:, 0] * robot_orientation[:, 3] + robot_orientation[:, 1] * robot_orientation[:, 2]),
                                      1.0 - 2.0 * (robot_orientation[:, 2]**2 + robot_orientation[:, 3]**2))
-                    wz_cmd = -0.5 * yaw  # P controller to face forward
+                    wz_cmd = -1.5 * yaw  # P controller to face forward
                     wz_cmd = torch.clamp(wz_cmd, min=-0.8, max=0.8)
                     vel_cmds = torch.tensor([0.35, 0.0, wz_cmd], device=env.unwrapped.device)
-                    gait_cmds = torch.tensor([1.0, 0.5, 0.5, 0.1], device=env.unwrapped.device) # freq, offset, duration
-                    env.unwrapped.action_manager._terms["joint_pos"].alpha = 0.64  # fc = 3.5 hz
-
+                    alpha = 0.9
+                    filtered_vel_cmds = alpha * filtered_vel_cmds + (1 - alpha) * vel_cmds
+                    f = 1.2*vel_cmds[0]/0.45
+                    f = torch.clamp(f, min=0.8, max=1.6)
+                    gait_cmds = torch.tensor([1.2, 0.5, 0.5, 0.1], device=env.unwrapped.device) # freq, offset, duration
+                    env.unwrapped.action_manager._terms["joint_pos"].alpha = 0.45  # fc = 3.5 hz
                     gait_cmds = gait_cmds.repeat(num_envs, 1)
+                    vel_cmds = vel_cmds.repeat(num_envs, 1)
+
+
+
+
 
                 policy_counter += 1
 
@@ -312,38 +328,75 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg, agent_cfg: RslRlBaseRun
                     
                 
                 with torch.inference_mode():
-                    # if counter < max_num_steps - 1:
-                    #     # action = env.unwrapped.action_manager.action.clone()
-                    #     # prev_action = env.unwrapped.action_manager.prev_action.clone()
-                    #     # filter_actions = env.unwrapped.action_manager._terms["joint_pos"].filtered_actions.clone()
-                    #     # prev_filtered_actions = env.unwrapped.action_manager._terms["joint_pos"].prev_filtered_actions.clone()
-                    #     # # joint_vels[counter] = (filter_actions - prev_filtered_actions)
-                    #     applied_torque = asset.data.applied_torque.clone()
-                    #     joint_vels[counter] = (applied_torque - prev_applied_torque)
-                    #     prev_applied_torque = applied_torque
-                    #     # joint_pos = asset.data.joint_pos.clone()
-                    #     # joint_vels[counter] = joint_pos
-                    # else:
-                    #     joint_vels = joint_vels.cpu().numpy()
-                    #     fig, axes = plt.subplots(2, 5, figsize=(8, 16))
-                    #     joint_names = asset.joint_names
-                    #     for j in range(asset.num_joints):
-                    #         axes[j//5, j%5].plot(joint_vels[:, 0 , j], label=f'Joint {j}')
-                    #         axes[j//5, j%5].set_xlabel('Time step')
-                    #         axes[j//5, j%5].set_ylabel('Joint Velocity (rad/s)')
-                    #         axes[j//5, j%5].set_title(f'Joint {joint_names[j]} Velocity over Time')
-                    #         axes[j//5, j%5].legend()
-                    #         axes[j//5, j%5].grid()
-                    #     plt.tight_layout()
-                    #     plt.show()
+                    if counter < max_num_steps - 1:
+                        # action = env.unwrapped.action_manager.action.clone()
+                        # prev_action = env.unwrapped.action_manager.prev_action.clone()
+                        # filter_actions = env.unwrapped.action_manager._terms["joint_pos"].filtered_actions.clone()
+                        # prev_filtered_actions = env.unwrapped.action_manager._terms["joint_pos"].prev_filtered_actions.clone()
+                        # # joint_vels[counter] = (filter_actions - prev_filtered_actions)
+                        applied_torque = asset.data.applied_torque.clone()
+                        joint_vels[counter] = (applied_torque - prev_applied_torque)
+                        prev_applied_torque = applied_torque
+                        # joint_pos = asset.data.joint_pos.clone()
+                        # joint_vels[counter] = joint_pos
+                    else:
+                        joint_vels = joint_vels.cpu().numpy()
+                        fig, axes = plt.subplots(2, 5, figsize=(8, 16))
+                        joint_names = asset.joint_names
+                        for j in range(asset.num_joints):
+                            axes[j//5, j%5].plot(joint_vels[:, 0 , j], label=f'Joint {j}')
+                            axes[j//5, j%5].set_xlabel('Time step')
+                            axes[j//5, j%5].set_ylabel('Joint Velocity (rad/s)')
+                            axes[j//5, j%5].set_title(f'Joint {joint_names[j]} Velocity over Time')
+                            axes[j//5, j%5].legend()
+                            axes[j//5, j%5].grid()
+                        plt.tight_layout()
+                        plt.show()
+                    ang_vel = obs["play_obs"][:, :3]
+                    circular_buffer_list[0].append(ang_vel)
+                    data_list[0] = circular_buffer_list[0].buffer.reshape(num_envs, -1)
 
-                    new_obs = obs.clone()
+                    projected_g = obs["play_obs"][:, 3:6]
+                    circular_buffer_list[1].append(projected_g)
+                    data_list[1] = circular_buffer_list[1].buffer.reshape(num_envs, -1)
+
+                    joint_pos = obs["play_obs"][:, 6:16]
+                    circular_buffer_list[2].append(joint_pos)
+                    data_list[2] = circular_buffer_list[2].buffer.reshape(num_envs, -1)
+
+                    joint_vel = obs["play_obs"][:, 16:26]
+                    circular_buffer_list[3].append(joint_vel)
+                    data_list[3] = circular_buffer_list[3].buffer.reshape(num_envs, -1)
+
+                    last_action = obs["play_obs"][:, 26:36]
+                    circular_buffer_list[4].append(last_action)
+                    data_list[4] = circular_buffer_list[4].buffer.reshape(num_envs, -1)
+
+
+                    circular_buffer_list[5].append(vel_cmds)
+                    data_list[5] = circular_buffer_list[5].buffer.reshape(num_envs, -1)
+
+
+                    gait_indices = torch.remainder(policy_counter * env.unwrapped.step_dt * gait_cmds[:, 0], 1.0)
+                    gait_indices = gait_indices.unsqueeze(-1)
+                    sin_phase = torch.sin(2 * torch.pi * gait_indices)
+                    cos_phase = torch.cos(2 * torch.pi * gait_indices)
+                    gait_phase = torch.cat([sin_phase, cos_phase], dim=-1)
+                    circular_buffer_list[6].append(gait_phase)
+                    data_list[6] = circular_buffer_list[6].buffer.reshape(num_envs, -1)
+
+                    circular_buffer_list[7].append(gait_cmds)
+                    data_list[7] = circular_buffer_list[7].buffer.reshape(num_envs, -1)
+
+                    new_obs = torch.cat(data_list, dim=-1)
+                    new_obs_dict = obs.clone()
+                    new_obs_dict["policy"] = new_obs
                     # new_obs["policy"][:, 36:39] = vel_cmds
                     # new_obs["policy"][:, 39:41] = gait_phase
                     # new_obs["policy"][:, 41:] = gait_cmds
-                    new_obs["policy"][:, 36:39] = vel_cmds
-                    new_obs["policy"][:, 39:] = gait_cmds
-                    actions = policy(new_obs)
+                    # new_obs["policy"][:, 36:39] = vel_cmds
+                    # new_obs["policy"][:, 39:] = gait_cmds
+                    actions = policy(new_obs_dict)
 
         # run everything in inference mode
         with torch.inference_mode():

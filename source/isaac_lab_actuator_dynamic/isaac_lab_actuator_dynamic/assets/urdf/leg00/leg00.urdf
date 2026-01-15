@@ -296,7 +296,8 @@
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="meshes/L_toe.STL" />
+          filename="meshes/L_toe.STL" 
+          scale="1.0 1.0 0.5"/>
       </geometry>
       <material
         name="">

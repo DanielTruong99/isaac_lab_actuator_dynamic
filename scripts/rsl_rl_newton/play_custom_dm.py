@@ -283,8 +283,8 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg, agent_cfg: RslRlBaseRun
                 vel_cmds = torch.zeros((num_envs, 3), device=env.unwrapped.device)
                 gait_cmds = torch.tensor([0.0, 0.0, 1.0, 0.0], device=env.unwrapped.device) # freq, offset, duration
                 gait_cmds = gait_cmds.repeat(num_envs, 1)
-                counter_5s = 1.0 / dt
-                env.unwrapped.action_manager._terms["joint_pos"].alpha = 0.64  # fc = 3.5 hz
+                counter_5s = 3.0 / dt
+                env.unwrapped.action_manager._terms["joint_pos"].alpha = 0.0  # fc = 3.5 hz
                 # counter = 0
                 policy_counter = 0
 
@@ -293,24 +293,13 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg, agent_cfg: RslRlBaseRun
                     robot_orientation = asset.data.root_com_quat_w.clone()
                     yaw = torch.atan2(2.0 * (robot_orientation[:, 0] * robot_orientation[:, 3] + robot_orientation[:, 1] * robot_orientation[:, 2]),
                                      1.0 - 2.0 * (robot_orientation[:, 2]**2 + robot_orientation[:, 3]**2))
-                    wz_cmd = -0.5 * yaw  # P controller to face forward
+                    wz_cmd = -1.3 * yaw  # P controller to face forward
                     wz_cmd = torch.clamp(wz_cmd, min=-0.8, max=0.8)
+                    vd = 0.5; d = torch.tensor([1.0, 0.0], device=env.unwrapped.device)
                     vel_cmds = torch.tensor([0.35, 0.0, wz_cmd], device=env.unwrapped.device)
-                    gait_cmds = torch.tensor([1.0, 0.5, 0.5, 0.1], device=env.unwrapped.device) # freq, offset, duration
-                    env.unwrapped.action_manager._terms["joint_pos"].alpha = 0.64  # fc = 3.5 hz
-
-                    gait_cmds = gait_cmds.repeat(num_envs, 1)
-
-                policy_counter += 1
-
-                # Calculate gait indices based on episode length
-                # gait_indices = torch.remainder(policy_counter * env.unwrapped.step_dt * gait_cmds[:, 0], 1.0)
-                # gait_indices = gait_indices.unsqueeze(-1)
-                # sin_phase = torch.sin(2 * torch.pi * gait_indices)
-                # cos_phase = torch.cos(2 * torch.pi * gait_indices)
-                # gait_phase = torch.cat([sin_phase, cos_phase], dim=-1)
-                    
-                
+                    # vel_cmds[:, 0:2] = vd * d
+                    env.unwrapped.action_manager._terms["joint_pos"].alpha = 0.0  # fc = 3.5 hz
+       
                 with torch.inference_mode():
                     # if counter < max_num_steps - 1:
                     #     # action = env.unwrapped.action_manager.action.clone()
@@ -321,8 +310,6 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg, agent_cfg: RslRlBaseRun
                     #     applied_torque = asset.data.applied_torque.clone()
                     #     joint_vels[counter] = (applied_torque - prev_applied_torque)
                     #     prev_applied_torque = applied_torque
-                    #     # joint_pos = asset.data.joint_pos.clone()
-                    #     # joint_vels[counter] = joint_pos
                     # else:
                     #     joint_vels = joint_vels.cpu().numpy()
                     #     fig, axes = plt.subplots(2, 5, figsize=(8, 16))
@@ -338,11 +325,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg, agent_cfg: RslRlBaseRun
                     #     plt.show()
 
                     new_obs = obs.clone()
-                    # new_obs["policy"][:, 36:39] = vel_cmds
-                    # new_obs["policy"][:, 39:41] = gait_phase
-                    # new_obs["policy"][:, 41:] = gait_cmds
-                    new_obs["policy"][:, 36:39] = vel_cmds
-                    new_obs["policy"][:, 39:] = gait_cmds
+                    new_obs["policy"][:, -3:] = vel_cmds
                     actions = policy(new_obs)
 
         # run everything in inference mode

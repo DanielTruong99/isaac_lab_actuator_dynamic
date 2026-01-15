@@ -536,17 +536,21 @@ LEGWALKING_HIGH_GAIN_AMARTURE_3_CFG = ArticulationCfg(
 )
 
 ETA = 1.1
-NATURAL_FREQUENCY = 2.0 * math.pi * 5.45 # 5.45 Hz
+NATURAL_FREQUENCY = 2.0 * math.pi * 5.45 # 10.0 Hz
 STIFFNESS = NATURAL_FREQUENCY * NATURAL_FREQUENCY
 DAMPING = 2.0 * ETA * NATURAL_FREQUENCY
 HIP_STIFFNESS = STIFFNESS *  0.102588
 HIP_DAMPING = DAMPING * 0.102588
 
-HIP2_STIFFNESS = STIFFNESS * 0.15
-HIP2_DAMPING = DAMPING * 0.15
+# I_HIP2 = 0.457870
+I_HIP2 = 0.15
+HIP2_STIFFNESS = STIFFNESS * I_HIP2
+HIP2_DAMPING = DAMPING * I_HIP2
 
-THIGH_STIFFNESS = STIFFNESS * 0.16
-THIGH_DAMPING = DAMPING * 0.16
+I_THIGH = 0.16
+# I_THIGH = 0.596446
+THIGH_STIFFNESS = STIFFNESS * I_THIGH
+THIGH_DAMPING = DAMPING * I_THIGH
 
 CALF_STIFFNESS = STIFFNESS * 0.076797
 CALF_DAMPING = DAMPING * 0.076797
@@ -554,7 +558,7 @@ CALF_DAMPING = DAMPING * 0.076797
 TOE_STIFFNESS = STIFFNESS * 0.040897
 TOE_DAMPING = DAMPING * 0.040897
 
-LEGWALKING_HIGH_GAIN_AMARTURE_5_CFG = ArticulationCfg(
+LEGWALKING_HIGH_GAIN_AMARTURE_9_CFG = ArticulationCfg(
     spawn=sim_utils.UsdFileCfg(
         usd_path=LEGACTUATORDYNAMIC_2_USD_PATH,
         activate_contact_sensors=True,
@@ -595,17 +599,17 @@ LEGWALKING_HIGH_GAIN_AMARTURE_5_CFG = ArticulationCfg(
     actuators={
         "left_leg": ImplicitActuatorCfg(
             joint_names_expr=["L_hip_joint", "L_hip2_joint", "L_thigh_joint"],
-            effort_limit=105.0,
-            velocity_limit=23.0,
+            effort_limit_sim=105.0,
+            velocity_limit_sim=23.0,
             stiffness={
-                "L_hip_joint": HIP_STIFFNESS,
-                "L_hip2_joint": HIP2_STIFFNESS,
-                "L_thigh_joint": THIGH_STIFFNESS,
+                "L_hip_joint": 200.0,
+                "L_hip2_joint": 250.0,
+                "L_thigh_joint": 300.0,
             },
             damping={
-                "L_hip_joint": HIP_DAMPING,
-                "L_hip2_joint": HIP2_DAMPING,
-                "L_thigh_joint": THIGH_DAMPING,
+                "L_hip_joint": 5.0,
+                "L_hip2_joint": 5.0,
+                "L_thigh_joint": 5.0,
             },
             armature={
                 "L_hip_joint": 0.102588,
@@ -615,13 +619,13 @@ LEGWALKING_HIGH_GAIN_AMARTURE_5_CFG = ArticulationCfg(
         ),
         "L_calf": ImplicitActuatorCfg(
             joint_names_expr=["L_calf_joint"],
-            effort_limit=159.0,
-            velocity_limit=16.7,
+            effort_limit_sim=159.0,
+            velocity_limit_sim=16.7,
             stiffness={
-                "L_calf_joint": CALF_STIFFNESS,
+                "L_calf_joint": 200.0,
             },
             damping={
-                "L_calf_joint": CALF_DAMPING,
+                "L_calf_joint": 5.0,
             },
             armature={
                 "L_calf_joint": 0.076797,
@@ -629,26 +633,26 @@ LEGWALKING_HIGH_GAIN_AMARTURE_5_CFG = ArticulationCfg(
         ),
         "L_feet": ImplicitActuatorCfg(
             joint_names_expr=["L_toe_joint"],
-            effort_limit=28.0,
-            velocity_limit=8.69,
-            stiffness={"L_toe_joint": TOE_STIFFNESS},
-            damping={"L_toe_joint": TOE_DAMPING},
+            effort_limit_sim=28.0,
+            velocity_limit_sim=8.69,
+            stiffness={"L_toe_joint": 50.0},
+            damping={"L_toe_joint": 5.0},
             armature={"L_toe_joint": 0.040897},
         ),  
 
         "right_leg": ImplicitActuatorCfg(
             joint_names_expr=["R_hip_joint", "R_hip2_joint", "R_thigh_joint"],
-            effort_limit=105.0,
-            velocity_limit=23.0,
+            effort_limit_sim=105.0,
+            velocity_limit_sim=23.0,
             stiffness={
-                "R_hip_joint": HIP_STIFFNESS,
-                "R_hip2_joint": HIP2_STIFFNESS,
-                "R_thigh_joint": THIGH_STIFFNESS,
+                "R_hip_joint": 200.0,
+                "R_hip2_joint": 250.0,
+                "R_thigh_joint": 300.0,
             },
             damping={
-                "R_hip_joint": HIP_DAMPING,
-                "R_hip2_joint": HIP2_DAMPING,
-                "R_thigh_joint": THIGH_DAMPING,
+                "R_hip_joint": 5.0,
+                "R_hip2_joint": 5.0,
+                "R_thigh_joint": 5.0,
             },
             armature={
                 "R_hip_joint": 0.130943,
@@ -659,13 +663,13 @@ LEGWALKING_HIGH_GAIN_AMARTURE_5_CFG = ArticulationCfg(
 
         "R_calf": ImplicitActuatorCfg(
             joint_names_expr=["R_calf_joint"],
-            effort_limit=159.0,
-            velocity_limit=16.7,
+            effort_limit_sim=159.0,
+            velocity_limit_sim=16.7,
             stiffness={
-                "R_calf_joint": CALF_STIFFNESS,
+                "R_calf_joint": 200.0,
             },
             damping={
-                "R_calf_joint": CALF_DAMPING,
+                "R_calf_joint": 5.0,
             },
             armature={
                 "R_calf_joint": 0.231993,
@@ -674,141 +678,24 @@ LEGWALKING_HIGH_GAIN_AMARTURE_5_CFG = ArticulationCfg(
 
         "R_feet": ImplicitActuatorCfg(
             joint_names_expr=["R_toe_joint"],
-            effort_limit=28.0,
-            velocity_limit=8.69,
-            stiffness={"R_toe_joint": TOE_STIFFNESS},
-            damping={"R_toe_joint": TOE_DAMPING},
+            effort_limit_sim=28.0,
+            velocity_limit_sim=8.69,
+            stiffness={"R_toe_joint": 50.0},
+            damping={"R_toe_joint": 5.0},
             armature={"R_toe_joint": 0.062950},
         ),
     },
 )
 
-LEGACTUATORDYNAMIC_NEWFOOT_USD_PATH = f"/home/humanoid2/DanielTruong/isaac_lab_actuator_dynamic/source/isaac_lab_actuator_dynamic/isaac_lab_actuator_dynamic/assets/urdf/leg05/robot_newfoot.usd"
-LEGWALKING_HIGH_GAIN_AMARTURE_5_NEWFOOT_CFG = ArticulationCfg(
-    spawn=sim_utils.UsdFileCfg(
-        usd_path=LEGACTUATORDYNAMIC_NEWFOOT_USD_PATH,
-        activate_contact_sensors=True,
-        articulation_props=sim_utils.ArticulationRootPropertiesCfg(
-            enabled_self_collisions=True,
-            fix_root_link=False,
-        ),
-        collision_props=sim_utils.CollisionPropertiesCfg(
-            approximation="boundingCube",
-        ),
-        rigid_props=sim_utils.RigidBodyPropertiesCfg(
-            disable_gravity=False,
-            retain_accelerations=False,
-            linear_damping=0.0,
-            angular_damping=0.0,
-            max_linear_velocity=1000.0,
-            max_angular_velocity=1000.0,
-            max_depenetration_velocity=10.0,
-        ),
-    ),
-    init_state=ArticulationCfg.InitialStateCfg(
-        pos=(0.0, 0.0, 0.65),
-        joint_pos={
-            'L_hip_joint': 0.0, # limit -35, 35 (degrees)
-            'L_hip2_joint': 0.0, # limit -35, 35 (degrees)
-            'L_thigh_joint': 0.0, # limit -70, 70 (degrees)
-            'L_calf_joint': 0.0, # limit -110, 0 (degrees)
-            'L_toe_joint': 0.0, # limit -45, 45 (degrees)
-            'R_hip_joint': 0.0, # limit -35, 35 (degrees)
-            'R_hip2_joint': 0.0, # limit -35, 35 (degrees)
-            'R_thigh_joint': 0.0, # limit -70, 70 (degrees)
-            'R_calf_joint': 0.0, # limit -110, 0 (degrees)
-            'R_toe_joint': 0.0, # limit -45, 45 (degrees)
-        },
-        joint_vel={".*": 0.0},
-    ),
-    soft_joint_pos_limit_factor=0.97,
-    actuators={
-        "left_leg": ImplicitActuatorCfg(
-            joint_names_expr=["L_hip_joint", "L_hip2_joint", "L_thigh_joint"],
-            effort_limit=105.0,
-            velocity_limit=23.0,
-            stiffness={
-                "L_hip_joint": HIP_STIFFNESS,
-                "L_hip2_joint": HIP2_STIFFNESS,
-                "L_thigh_joint": THIGH_STIFFNESS,
-            },
-            damping={
-                "L_hip_joint": HIP_DAMPING,
-                "L_hip2_joint": HIP2_DAMPING,
-                "L_thigh_joint": THIGH_DAMPING,
-            },
-            armature={
-                "L_hip_joint": 0.102588,
-                "L_hip2_joint": 0.457870,
-                "L_thigh_joint": 0.596446,
-            },
-        ),
-        "L_calf": ImplicitActuatorCfg(
-            joint_names_expr=["L_calf_joint"],
-            effort_limit=159.0,
-            velocity_limit=16.7,
-            stiffness={
-                "L_calf_joint": CALF_STIFFNESS,
-            },
-            damping={
-                "L_calf_joint": CALF_DAMPING,
-            },
-            armature={
-                "L_calf_joint": 0.076797,
-            },
-        ),
-        "L_feet": ImplicitActuatorCfg(
-            joint_names_expr=["L_toe_joint"],
-            effort_limit=28.0,
-            velocity_limit=8.69,
-            stiffness={"L_toe_joint": TOE_STIFFNESS},
-            damping={"L_toe_joint": TOE_DAMPING},
-            armature={"L_toe_joint": 0.040897},
-        ),  
-
-        "right_leg": ImplicitActuatorCfg(
-            joint_names_expr=["R_hip_joint", "R_hip2_joint", "R_thigh_joint"],
-            effort_limit=105.0,
-            velocity_limit=23.0,
-            stiffness={
-                "R_hip_joint": HIP_STIFFNESS,
-                "R_hip2_joint": HIP2_STIFFNESS,
-                "R_thigh_joint": THIGH_STIFFNESS,
-            },
-            damping={
-                "R_hip_joint": HIP_DAMPING,
-                "R_hip2_joint": HIP2_DAMPING,
-                "R_thigh_joint": THIGH_DAMPING,
-            },
-            armature={
-                "R_hip_joint": 0.130943,
-                "R_hip2_joint": 0.438781,
-                "R_thigh_joint": 0.336888,
-            },
-        ),
-
-        "R_calf": ImplicitActuatorCfg(
-            joint_names_expr=["R_calf_joint"],
-            effort_limit=159.0,
-            velocity_limit=16.7,
-            stiffness={
-                "R_calf_joint": CALF_STIFFNESS,
-            },
-            damping={
-                "R_calf_joint": CALF_DAMPING,
-            },
-            armature={
-                "R_calf_joint": 0.231993,
-            },
-        ),
-
-        "R_feet": ImplicitActuatorCfg(
-            joint_names_expr=["R_toe_joint"],
-            effort_limit=28.0,
-            velocity_limit=8.69,
-            stiffness={"R_toe_joint": TOE_STIFFNESS},
-            damping={"R_toe_joint": TOE_DAMPING},
-            armature={"R_toe_joint": 0.062950},
-        ),
-    },
-)
+ACTION_SCALE = {}
+for a in LEGWALKING_HIGH_GAIN_AMARTURE_9_CFG.actuators.values():
+    e = a.effort_limit_sim
+    s = a.stiffness
+    names = a.joint_names_expr
+    if not isinstance(e, dict):
+        e = {n: e for n in names}
+    if not isinstance(s, dict):
+        s = {n: s for n in names}
+    for n in names:
+        if n in e and n in s and s[n]:
+            ACTION_SCALE[n] = 0.25 * e[n] / s[n]

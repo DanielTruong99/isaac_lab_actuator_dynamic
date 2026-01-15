@@ -7,7 +7,7 @@ from isaaclab_rl.rsl_rl import RslRlDistillationAlgorithmCfg, RslRlDistillationS
 class WalkingRobotPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     num_steps_per_env = 24
     max_iterations = 100000
-    save_interval = 500
+    save_interval = 100
     experiment_name = "locomotion_robot"   
     empirical_normalization = False
 

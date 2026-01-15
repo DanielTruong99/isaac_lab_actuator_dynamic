@@ -8,6 +8,7 @@
 """Launch Isaac Sim Simulator first."""
 
 import argparse
+import math
 import sys
 
 from isaaclab.app import AppLauncher
@@ -81,9 +82,11 @@ from isaaclab_rl.rsl_rl import RslRlBaseRunnerCfg, RslRlVecEnvWrapper, export_po
 import isaaclab_tasks  # noqa: F401
 from isaaclab_tasks.utils import get_checkpoint_path
 from isaaclab_tasks.utils.hydra import hydra_task_config
+from isaaclab.utils.math import yaw_quat, quat_apply_inverse
 
 # PLACEHOLDER: Extension template (do not remove this comment)
 import isaac_lab_actuator_dynamic.tasks  # noqa: F401
+from isaac_lab_actuator_dynamic.assets import LEGWALKING_5_CFG, LEGWALKING_HIGH_GAIN_AMARTURE_CFG, LEGWALKING_HIGH_GAIN_AMARTURE_5_CFG, ACTION_SCALE
 
 @hydra_task_config(args_cli.task, args_cli.agent)
 def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg, agent_cfg: RslRlBaseRunnerCfg):
@@ -196,7 +199,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg, agent_cfg: RslRlBaseRun
     action_manager: ActionManager = env.unwrapped.action_manager
     joint_pos_action: JointPositionAction = action_manager._terms["joint_pos"]
 
-    joint_pos = torch.tensor([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], device=env.unwrapped.device)
+    joint_pos = torch.tensor([0.0, 0.0, 0.65, -1.05, 0.4, 0.0, 0.0, 0.65, -1.05, 0.4], device=env.unwrapped.device)
     joint_pos = joint_pos.repeat(num_envs, 1)
     joint_vel = torch.zeros(num_envs, asset.num_joints, device=env.unwrapped.device)
     asset.write_joint_state_to_sim(
@@ -204,7 +207,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg, agent_cfg: RslRlBaseRun
         joint_vel,
     )
     # TODO reset robot base to initial configuration
-    positions = torch.tensor([0.0, 0.0, 0.645], device=env.unwrapped.device)
+    positions = torch.tensor([0.0, 0.0, 0.8305], device=env.unwrapped.device)
     positions = positions.repeat(num_envs, 1)
     orientations = torch.tensor([1.0, 0.0, 0.0, 0.0], device=env.unwrapped.device)
     orientations = orientations.repeat(num_envs, 1)
@@ -276,41 +279,40 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg, agent_cfg: RslRlBaseRun
                 # asset.write_joint_damping_to_sim(dampings)
 
                 # modify joint position action settings, for policy output scaling
-                joint_pos_action._offset = torch.tensor([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], device=env.unwrapped.device)
-                joint_pos_action._scale = torch.tensor([0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25], device=env.unwrapped.device)
+                joint_pos_action._offset = torch.tensor([0.0, 0.0, 0.65, -1.05, 0.4, 0.0, 0.0, 0.65, -1.05, 0.4], device=env.unwrapped.device)
+                action_scales = [value for _, value in ACTION_SCALE.items()]
+                joint_pos_action._scale = torch.tensor(action_scales, device=env.unwrapped.device)
 
                 # standing command
                 vel_cmds = torch.zeros((num_envs, 3), device=env.unwrapped.device)
                 gait_cmds = torch.tensor([0.0, 0.0, 1.0, 0.0], device=env.unwrapped.device) # freq, offset, duration
                 gait_cmds = gait_cmds.repeat(num_envs, 1)
-                counter_5s = 1.0 / dt
-                env.unwrapped.action_manager._terms["joint_pos"].alpha = 0.64  # fc = 3.5 hz
+                counter_5s = 0.01 / dt
+                env.unwrapped.action_manager._terms["joint_pos"].alpha = 0.0  # fc = 3.5 hz
                 # counter = 0
                 policy_counter = 0
 
             if signal == "50hz_timeout":
                 if counter > counter_5s:
                     robot_orientation = asset.data.root_com_quat_w.clone()
-                    yaw = torch.atan2(2.0 * (robot_orientation[:, 0] * robot_orientation[:, 3] + robot_orientation[:, 1] * robot_orientation[:, 2]),
-                                     1.0 - 2.0 * (robot_orientation[:, 2]**2 + robot_orientation[:, 3]**2))
-                    wz_cmd = -0.5 * yaw  # P controller to face forward
-                    wz_cmd = torch.clamp(wz_cmd, min=-0.8, max=0.8)
-                    vel_cmds = torch.tensor([0.35, 0.0, wz_cmd], device=env.unwrapped.device)
-                    gait_cmds = torch.tensor([1.0, 0.5, 0.5, 0.1], device=env.unwrapped.device) # freq, offset, duration
-                    env.unwrapped.action_manager._terms["joint_pos"].alpha = 0.64  # fc = 3.5 hz
+                    quat_yaw = yaw_quat(robot_orientation)
+                    yaw_angle = torch.atan2(
+                        2.0 * (quat_yaw[:, 0] * quat_yaw[:, 3]),
+                        1.0 - 2.0 * (quat_yaw[:, 3] * quat_yaw[:, 3]),
+                    )
+                    phi = -2.5 * yaw_angle
+                    vel_cmds_global = torch.tensor([0.5, math.cos(phi), math.sin(phi)], device=env.unwrapped.device)
+                    vel_cmds_global = vel_cmds_global.repeat(num_envs, 1)
 
-                    gait_cmds = gait_cmds.repeat(num_envs, 1)
+                    tar_speed_global = vel_cmds_global[:, :1]
+                    tar_dir_global = vel_cmds_global[:, 1:]
+                    tar_dir_global = torch.cat([tar_dir_global, torch.zeros_like(tar_dir_global[..., 0:1])], dim=-1)
+                    tar_dir_local = quat_apply_inverse(quat_yaw, tar_dir_global)
+                    tar_dir_local = tar_dir_local[..., 0:2]
+                    vel_cmds = torch.cat([tar_speed_global, tar_dir_local], dim=-1)
 
-                policy_counter += 1
-
-                # Calculate gait indices based on episode length
-                # gait_indices = torch.remainder(policy_counter * env.unwrapped.step_dt * gait_cmds[:, 0], 1.0)
-                # gait_indices = gait_indices.unsqueeze(-1)
-                # sin_phase = torch.sin(2 * torch.pi * gait_indices)
-                # cos_phase = torch.cos(2 * torch.pi * gait_indices)
-                # gait_phase = torch.cat([sin_phase, cos_phase], dim=-1)
-                    
-                
+                    env.unwrapped.action_manager._terms["joint_pos"].alpha = 0.0  # fc = 3.5 hz
+       
                 with torch.inference_mode():
                     # if counter < max_num_steps - 1:
                     #     # action = env.unwrapped.action_manager.action.clone()
@@ -321,8 +323,6 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg, agent_cfg: RslRlBaseRun
                     #     applied_torque = asset.data.applied_torque.clone()
                     #     joint_vels[counter] = (applied_torque - prev_applied_torque)
                     #     prev_applied_torque = applied_torque
-                    #     # joint_pos = asset.data.joint_pos.clone()
-                    #     # joint_vels[counter] = joint_pos
                     # else:
                     #     joint_vels = joint_vels.cpu().numpy()
                     #     fig, axes = plt.subplots(2, 5, figsize=(8, 16))
@@ -338,11 +338,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg, agent_cfg: RslRlBaseRun
                     #     plt.show()
 
                     new_obs = obs.clone()
-                    # new_obs["policy"][:, 36:39] = vel_cmds
-                    # new_obs["policy"][:, 39:41] = gait_phase
-                    # new_obs["policy"][:, 41:] = gait_cmds
-                    new_obs["policy"][:, 36:39] = vel_cmds
-                    new_obs["policy"][:, 39:] = gait_cmds
+                    new_obs["policy"][:, -3:] = vel_cmds
                     actions = policy(new_obs)
 
         # run everything in inference mode

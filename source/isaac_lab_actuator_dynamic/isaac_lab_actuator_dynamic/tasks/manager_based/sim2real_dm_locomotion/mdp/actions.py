@@ -50,7 +50,6 @@ class CustomJointPositionAction(JointPositionAction):
         self.filtered_actions = torch.zeros_like(self.raw_actions)
         self.prev_filtered_actions = torch.zeros_like(self.raw_actions)
         self.alpha = 0.6
-        self.is_first = True
 
     def reset(self, env_ids: Sequence[int] | None = None) -> None:
         self.filtered_actions[env_ids] = 0.0
@@ -75,24 +74,19 @@ class CustomJointPositionAction(JointPositionAction):
         """
         self.joint_pos_offset = offset.to(dtype=torch.float32)
 
-    def process_actions(self, actions):
-        super().process_actions(actions)
+    # def process_actions(self, actions):
+    #     super().process_actions(actions)
 
-    #     # alpha = 0.65  # fc = 3.5 hz 
-        self.prev_filtered_actions = self.filtered_actions.clone()
-        if self.is_first:
-            self.filtered_actions = self._env.scene["robot"].data.joint_pos.clone()
-            self.is_first = False
-        self.filtered_actions = self.alpha * self.filtered_actions + (1 - self.alpha) * self.processed_actions
+    # #     # alpha = 0.65  # fc = 3.5 hz 
+    #     self.prev_filtered_actions = self.filtered_actions.clone()
+    #     self.filtered_actions = self.alpha * self.filtered_actions + (1 - self.alpha) * self.processed_actions
         
 
     def apply_actions(self):
         # set position targets
         # alpha = 0.6442 # fc = 3.5 hz
-        # self.filtered_actions[:, 0] = -self.filtered_actions[:, 0]
-        # self.filtered_actions[:, 5] = -self.filtered_actions[:, 5]
         
-        self._asset.set_joint_position_target(self.filtered_actions, joint_ids=self._joint_ids)
+        self._asset.set_joint_position_target(self.processed_actions, joint_ids=self._joint_ids)
 
         # set friction torques
         dof_vel = self._asset.data.joint_vel[:, self._joint_ids]

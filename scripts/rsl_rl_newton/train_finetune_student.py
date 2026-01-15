@@ -189,8 +189,29 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg, agent_cfg: RslRlBaseRun
     # load the checkpoint
     if agent_cfg.resume or agent_cfg.algorithm.class_name == "Distillation":
         print(f"[INFO]: Loading model checkpoint from: {resume_path}")
-        # load previously trained model
-        runner.load(resume_path)
+        loaded_dict = torch.load(resume_path, weights_only=False, map_location=None)
+        student_state_dict = {}
+        student_obs_normalizer_state_dict = {}
+        for key, value in loaded_dict["model_state_dict"].items():
+            if "student." in key:
+                student_state_dict[key.replace("student.", "")] = value
+            if "student_obs_normalizer." in key:
+                student_obs_normalizer_state_dict[key.replace("student_obs_normalizer.", "")] = value
+        runner.alg.policy.actor.load_state_dict(student_state_dict, strict=True)
+        runner.alg.policy.actor_obs_normalizer.load_state_dict(student_obs_normalizer_state_dict, strict=True)
+        runner.alg.policy.actor.eval()
+        runner.alg.policy.actor_obs_normalizer.eval()
+
+        # load critic
+        resume_path = "logs/rsl_rl/locomotion_robot_flat/2025-12-03_01-44-46/model_90400.pt"
+        loaded_dict = torch.load(resume_path, weights_only=False, map_location=None)
+        critic_state_dict = {}
+        for key, value in loaded_dict["model_state_dict"].items():
+            if "critic." in key:
+                critic_state_dict[key.replace("critic.", "")] = value
+        runner.alg.policy.critic.load_state_dict(critic_state_dict, strict=True)
+        runner.alg.policy.critic.eval()
+
 
     # dump the configuration into log-directory
     dump_yaml(os.path.join(log_dir, "params", "env.yaml"), env_cfg)

@@ -8,17 +8,17 @@
     name="base">
     <inertial>
       <origin
-        xyz="-0.021358 0.002756 0.088278"
+        xyz="-0.026750 -0.000690 0.062340"
         rpy="0 0 0" />
       <mass
-        value="13.923" />
+        value="7.4" />
       <inertia
-        ixx="0.180900"
-        ixy="-0.000471"
-        ixz="-0.006188"
-        iyy="0.103171"
-        iyz="-0.004229"
-        izz="0.194361" />
+        ixx="0.118496"
+        ixy="0.000133"
+        ixz="-0.000481"
+        iyy="0.059125"
+        iyz="0.000470"
+        izz="0.130201" />
     </inertial>
     <visual>
       <origin
@@ -277,17 +277,17 @@
     name="L_toe">
     <inertial>
       <origin
-        xyz="0.002701 0.015076 -0.032168"
+        xyz="-0.008587 0.014919  -0.027893"
         rpy="0 0 0" />
       <mass
-        value="0.520" />
+        value="0.177100" />
       <inertia
-        ixx="0.000162"
-        ixy="0.000016"
-        ixz="0.000083"
-        iyy="0.001485"
-        iyz="0.000003"
-        izz="0.001511" />
+        ixx="0.000056"
+        ixy="-0.000031"
+        ixz="0.000005"
+        iyy="0.000412"
+        iyz="0.000002"
+        izz="0.000405" />
     </inertial>
     <visual>
       <origin
@@ -295,7 +295,8 @@
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="meshes/L_toe.STL" />
+          filename="meshes/L_toe_newfoot.STL" 
+          scale="1.0 1.0 0.5714"/>
       </geometry>
       <material
         name="">
@@ -309,7 +310,8 @@
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="meshes/L_toe.STL" />
+          filename="meshes/L_toe_newfoot.STL" 
+          scale="1.0 1.0 0.5714"/>
       </geometry>
     </collision>
   </link>
@@ -593,17 +595,17 @@
     name="R_toe">
     <inertial>
       <origin
-        xyz="0.002387 -0.015128 -0.032168"
+        xyz="-0.008587 -0.014919 -0.027893"
         rpy="0 0 0" />
       <mass
-        value="0.520" />
+        value="0.177100" />
       <inertia
-        ixx="0.000162"
-        ixy="0.000012"
-        ixz="0.000083"
-        iyy="0.001485"
-        iyz="-0.000004"
-        izz="0.001511" />
+        ixx="0.000056"
+        ixy="0.000005"
+        ixz="0.000031"
+        iyy="0.000405"
+        iyz="-0.000002"
+        izz="0.000412"/>
     </inertial>
     <visual>
       <origin
@@ -611,7 +613,8 @@
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="meshes/R_toe.STL" />
+          filename="meshes/R_toe_newfoot.STL" 
+          scale="1.0 1.0 0.5714"/>
       </geometry>
       <material
         name="">
@@ -625,7 +628,8 @@
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="meshes/R_toe.STL" />
+          filename="meshes/R_toe_newfoot.STL" 
+          scale="1.0 1.0 0.5714"/>
       </geometry>
     </collision>
   </link>

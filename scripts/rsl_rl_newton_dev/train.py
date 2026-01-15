@@ -14,7 +14,7 @@ from isaaclab.app import AppLauncher
 
 # local imports
 import cli_args  # isort: skip
-# from isaaclab_rl.rsl_rl.vecenv_wrapper import TensorDict 
+
 
 # add argparse arguments
 parser = argparse.ArgumentParser(description="Train an RL agent with RSL-RL.")
@@ -81,7 +81,6 @@ from datetime import datetime
 
 import omni
 from rsl_rl.runners import DistillationRunner, OnPolicyRunner
-# from isaac_lab_actuator_dynamic.learning.rsl_rl.runners.custom_on_policy_runner import CustomOnPolicyRunner
 
 from isaaclab.utils.timer import Timer
 
@@ -100,6 +99,7 @@ from isaaclab_tasks.utils.hydra import hydra_task_config
 
 # PLACEHOLDER: Extension template (do not remove this comment)
 import isaac_lab_actuator_dynamic.tasks  # noqa: F401
+
 torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cudnn.allow_tf32 = True
 torch.backends.cudnn.deterministic = False
