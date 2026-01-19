@@ -6,8 +6,6 @@ from isaaclab.assets.articulation import Articulation
 
 from ..walking_robot import WalkingRobotEnv
 
-import warp as wp
-
 def robot_feet_contact_force(env: WalkingRobotEnv, sensor_cfg: SceneEntityCfg):
     """contact force of the robot feet"""
     contact_sensor = env.scene.sensors[sensor_cfg.name]
@@ -19,13 +17,15 @@ def robot_feet_contact_force(env: WalkingRobotEnv, sensor_cfg: SceneEntityCfg):
 def robot_mass(env: WalkingRobotEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
     """mass of the robot"""
     asset: Articulation = env.scene[asset_cfg.name]
-    return wp.to_torch(asset.data.body_mass).clone()
+    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+    return asset.data.default_mass.to(device)
 
 
 def robot_inertia(env: WalkingRobotEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
     """inertia of the robot"""
     asset: Articulation = env.scene[asset_cfg.name]
-    inertia_tensor = wp.to_torch(asset.data.body_inertia).clone()
+    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+    inertia_tensor = asset.data.default_inertia.to(device)
     return inertia_tensor.view(inertia_tensor.shape[0], -1)
 
 
@@ -69,15 +69,15 @@ def joint_actions(env: WalkingRobotEnv, asset_cfg: SceneEntityCfg = SceneEntityC
 def robot_joint_stiffness(env: WalkingRobotEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
     """joint stiffness of the robot"""
     asset: Articulation = env.scene[asset_cfg.name]
-    # device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-    return wp.to_torch(asset.data.joint_stiffness).clone()
+    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+    return asset.data.joint_stiffness.to(device)
 
 
 def robot_joint_damping(env: WalkingRobotEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
     """joint damping of the robot"""
     asset: Articulation = env.scene[asset_cfg.name]
-    # device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-    return wp.to_torch(asset.data.joint_damping).clone()
+    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+    return asset.data.joint_damping.to(device)
 
 
 def robot_pos(env: WalkingRobotEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
@@ -125,7 +125,7 @@ def feet_lin_vel(env: WalkingRobotEnv, asset_cfg: SceneEntityCfg = SceneEntityCf
     """Root linear velocity in the asset's root frame."""
     # extract the used quantities (to enable type-hinting)
     asset = env.scene[asset_cfg.name]
-    return wp.to_torch(asset.data.body_lin_vel_w)[:, asset_cfg.body_ids].clone().flatten(start_dim=1)
+    return asset.data.body_lin_vel_w[:, asset_cfg.body_ids].flatten(start_dim=1)
 
 def get_gait_phase(env: WalkingRobotEnv) -> torch.Tensor:
     """Get the current gait phase as observation.
@@ -161,6 +161,7 @@ def get_gait_command(env: WalkingRobotEnv, command_name: str) -> torch.Tensor:
     """
     return env.command_manager.get_command(command_name)
 
+
 def get_phase(env: WalkingRobotEnv) -> torch.Tensor:
     sin_phase = torch.sin(2 * np.pi * env.phase ).unsqueeze(1)
     cos_phase = torch.cos(2 * np.pi * env.phase ).unsqueeze(1)
@@ -178,7 +179,8 @@ def joint_torque(env: WalkingRobotEnv, asset_cfg: SceneEntityCfg = SceneEntityCf
 
 def joint_acc(env: WalkingRobotEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
     asset: Articulation = env.scene[asset_cfg.name]
-    return wp.to_torch(asset.data.joint_acc).clone()[:, asset_cfg.joint_ids]
+    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+    return asset.data.joint_acc[:, asset_cfg.joint_ids].to(device)
 
 def joint_pos_and_cmd(env: WalkingRobotEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
     asset: Articulation = env.scene[asset_cfg.name]

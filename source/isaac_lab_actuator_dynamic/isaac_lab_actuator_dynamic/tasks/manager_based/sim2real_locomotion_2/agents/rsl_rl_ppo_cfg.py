@@ -8,15 +8,15 @@ class WalkingRobotPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     num_steps_per_env = 24
     max_iterations = 100000
     save_interval = 100
-    experiment_name = "locomotion_robot_flat"   
+    experiment_name = "locomotion_robot_2"   
     empirical_normalization = False
 
-    resume = True
-    load_checkpoint = "model_27900.pt"
-    load_run = "2026-01-16_11-38-30"
+    # resume = True
+    # load_checkpoint = "model_27900.pt"
+    # load_run = "2026-01-16_11-38-30"
 
     policy = RslRlPpoActorCriticCfg(
-        init_noise_std = 0.7,
+        init_noise_std = 1.0,
         activation = "elu",
         actor_hidden_dims = [512, 256, 128],
         critic_hidden_dims = [512, 256, 128],

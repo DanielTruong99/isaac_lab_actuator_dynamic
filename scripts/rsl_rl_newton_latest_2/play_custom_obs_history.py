@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2025, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -34,7 +34,6 @@ parser.add_argument(
     help="Use the pre-trained checkpoint from Nucleus.",
 )
 parser.add_argument("--real-time", action="store_true", default=False, help="Run in real-time, if possible.")
-parser.add_argument("--newton_visualizer", action="store_true", default=False, help="Enable Newton rendering.")
 # append RSL-RL cli arguments
 cli_args.add_rsl_rl_args(parser)
 # append AppLauncher cli args
@@ -59,23 +58,24 @@ import gymnasium as gym
 import os
 import time
 import torch
+import warp as wp
 import matplotlib.pyplot as plt
-
 from rsl_rl.runners import DistillationRunner, OnPolicyRunner
 
+from isaaclab.utils import close_simulation, is_simulation_running
+from isaaclab.utils.pretrained_checkpoint import get_published_pretrained_checkpoint
 from isaaclab.utils.timer import Timer
 import numpy as np
-
 Timer.enable = False
 Timer.enable_display_output = False
 
+import isaaclab_tasks_experimental  # noqa: F401
 from isaaclab.assets import Articulation
 from isaaclab.envs import DirectRLEnvCfg, ManagerBasedRLEnvCfg
 from isaaclab.managers.action_manager import ActionManager
 from isaaclab.envs.mdp.actions import JointPositionAction
 from isaaclab.utils.assets import retrieve_file_path
 from isaaclab.utils.dict import print_dict
-from isaaclab.utils.pretrained_checkpoint import get_published_pretrained_checkpoint
 
 from isaaclab_rl.rsl_rl import RslRlBaseRunnerCfg, RslRlVecEnvWrapper, export_policy_as_jit, export_policy_as_onnx
 
@@ -83,10 +83,11 @@ import isaaclab_tasks  # noqa: F401
 from isaaclab_tasks.utils import get_checkpoint_path
 from isaaclab_tasks.utils.hydra import hydra_task_config
 from isaaclab.utils.buffers import CircularBuffer
-from isaac_lab_actuator_dynamic.assets import FLATFOOT_WITHPIN_HIGHGAIN_CFG, HIGHGAIN_ACTION_SCALE
- 
+from isaac_lab_actuator_dynamic.assets import LEG_CHANGED_IMU_HIGHGAIN_ACTION_SCALE
+
+
 # PLACEHOLDER: Extension template (do not remove this comment)
-import isaac_lab_actuator_dynamic.tasks  # noqa: F401
+import isaac_lab_actuator_dynamic.tasks # noqa: F401
 
 @hydra_task_config(args_cli.task, args_cli.agent)
 def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg, agent_cfg: RslRlBaseRunnerCfg):
@@ -103,7 +104,6 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg, agent_cfg: RslRlBaseRun
     # note: certain randomizations occur in the environment initialization so we set the seed here
     env_cfg.seed = agent_cfg.seed
     env_cfg.sim.device = args_cli.device if args_cli.device is not None else env_cfg.sim.device
-    env_cfg.sim.enable_newton_rendering = args_cli.newton_visualizer
 
     # specify directory for logging experiments
     log_root_path = os.path.join("logs", "rsl_rl", agent_cfg.experiment_name)
@@ -123,19 +123,6 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg, agent_cfg: RslRlBaseRun
 
     # set the log directory for the environment (works for all environment types)
     env_cfg.log_dir = log_dir
-
-    # Set play mode for Newton viewer if using Newton visualizer
-    if args_cli.newton_visualizer:
-        # Set visualizer to play mode in Newton config
-        if hasattr(env_cfg.sim, "newton_cfg"):
-            env_cfg.sim.newton_cfg.visualizer_train_mode = False
-        else:
-            # Create newton_cfg if it doesn't exist
-            from isaaclab.sim._impl.newton_manager_cfg import NewtonCfg
-
-            newton_cfg = NewtonCfg()
-            newton_cfg.visualizer_train_mode = False
-            env_cfg.sim.newton_cfg = newton_cfg
 
     # create isaac environment
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
@@ -192,6 +179,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg, agent_cfg: RslRlBaseRun
 
     dt = env.unwrapped.step_dt
 
+    # reset environment
     # TODO reset environment
     # TODO reset joint states to initial configuration
     num_envs = env.unwrapped.num_envs
@@ -209,7 +197,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg, agent_cfg: RslRlBaseRun
     # TODO reset robot base to initial configuration
     positions = torch.tensor([0.0, 0.0, 0.65], device=env.unwrapped.device)
     positions = positions.repeat(num_envs, 1)
-    orientations = torch.tensor([1.0, 0.0, 0.0, 0.0], device=env.unwrapped.device)
+    orientations = torch.tensor([0.0, 0.0, 0.0, 1.0], device=env.unwrapped.device)
     orientations = orientations.repeat(num_envs, 1)
     asset.write_root_pose_to_sim(torch.cat([positions, orientations], dim=-1))
 
@@ -228,14 +216,14 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg, agent_cfg: RslRlBaseRun
     state = "STAND"
     pre_state = "NONE"
     signal = "entry"
-    prev_applied_torque = torch.zeros_like(asset.data.applied_torque, device=env.unwrapped.device)
+    prev_applied_torque = torch.zeros_like(wp.to_torch(asset.data.applied_torque), device=env.unwrapped.device)
     circular_buffer_list = []
     data_list = [None] * 8
     for _ in range(8):
         circular_buffer_list.append(CircularBuffer(max_len=10, batch_size=num_envs, device=env.unwrapped.device))
 
     # simulate environment
-    while simulation_app.is_running():
+    while is_simulation_running(simulation_app, env.unwrapped.sim):
         start_time = time.time()
 
         signal = "50hz_timeout"
@@ -264,7 +252,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg, agent_cfg: RslRlBaseRun
                 max_time = 0.1; max_counter = max_time / dt
                 first_pos_cmd = torch.tensor([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], device=env.unwrapped.device)
                 first_pos_cmd = first_pos_cmd.repeat(num_envs, 1)
-                first_joint_pos = asset.data.joint_pos.clone()
+                first_joint_pos = wp.to_torch(asset.data.joint_pos).clone()
             
             if signal == "50hz_timeout":
                 alpha = counter / max_counter
@@ -286,7 +274,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg, agent_cfg: RslRlBaseRun
                 # asset.write_joint_damping_to_sim(dampings)
 
                 # modify joint position action settings, for policy output scaling
-                action_scales = [value for _, value in HIGHGAIN_ACTION_SCALE.items()]
+                action_scales = [value for _, value in LEG_CHANGED_IMU_HIGHGAIN_ACTION_SCALE.items()]
                 joint_pos_action._offset = torch.tensor([0.0, 0.0, 0.65, -1.05, 0.4, 0.0, 0.0, 0.65, -1.05, 0.4], device=env.unwrapped.device)
                 joint_pos_action._scale = torch.tensor(action_scales, device=env.unwrapped.device)
 
@@ -298,16 +286,17 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg, agent_cfg: RslRlBaseRun
                 counter_10s = 10.0 / dt
                 counter_15s = 15.0 / dt
                 counter_20s = 20.0 / dt
-                env.unwrapped.action_manager._terms["joint_pos"].alpha = 0.5  # fc = 3.5 hz
+                env.unwrapped.action_manager._terms["joint_pos"].alpha = 0.65  # fc = 3.5 hz
                 # counter = 0
                 policy_counter = 0
                 filtered_vel_cmds = torch.zeros((num_envs, 3), device=env.unwrapped.device)
 
             if signal == "50hz_timeout":
                 if counter > counter_5s:
-                    robot_orientation = asset.data.root_com_quat_w.clone()
-                    yaw = torch.atan2(2.0 * (robot_orientation[:, 0] * robot_orientation[:, 3] + robot_orientation[:, 1] * robot_orientation[:, 2]),
-                                     1.0 - 2.0 * (robot_orientation[:, 2]**2 + robot_orientation[:, 3]**2))
+                    robot_orientation = wp.to_torch(asset.data.root_com_quat_w).clone()
+                    #! x,y,z,w
+                    yaw = torch.atan2(2.0 * (robot_orientation[:, 3] * robot_orientation[:, 2] + robot_orientation[:, 0] * robot_orientation[:, 1]),
+                                     1.0 - 2.0 * (robot_orientation[:, 1]**2 + robot_orientation[:, 2]**2))
                     wz_cmd = -1.0 * yaw  # P controller to face forward
                     wz_cmd = torch.clamp(wz_cmd, min=-0.8, max=0.8)
                     vel_cmds = torch.tensor([0.3, 0.0, wz_cmd], device=env.unwrapped.device)
@@ -392,7 +381,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg, agent_cfg: RslRlBaseRun
                         # base_lin_vel = asset.data.root_lin_vel_b.clone()
                         # joint_pos = asset.data.joint_pos.clone()
                         # joint_vel = asset.data.joint_vel.clone()
-                        applied_torque = asset.data.applied_torque.clone()
+                        applied_torque = wp.to_torch(asset.data.applied_torque).clone()
                         joint_vels[counter] = applied_torque
                         # joint_poses[counter] = joint_pos
                         # joint_torques[counter] = applied_torque
@@ -455,7 +444,6 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg, agent_cfg: RslRlBaseRun
                     new_obs_dict = obs.clone()
                     new_obs_dict["policy"] = new_obs
                     actions = policy(new_obs_dict)
-
         # run everything in inference mode
         with torch.inference_mode():
             # agent stepping
@@ -469,7 +457,6 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg, agent_cfg: RslRlBaseRun
                 break
 
         counter += 1
-
         # time delay for real-time evaluation
         sleep_time = dt - (time.time() - start_time)
         if args_cli.real_time and sleep_time > 0:
@@ -483,4 +470,4 @@ if __name__ == "__main__":
     # run the main function
     main()
     # close sim app
-    simulation_app.close()
+    close_simulation(simulation_app)

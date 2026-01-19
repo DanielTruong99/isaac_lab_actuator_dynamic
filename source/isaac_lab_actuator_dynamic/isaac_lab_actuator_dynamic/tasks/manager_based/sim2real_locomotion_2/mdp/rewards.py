@@ -348,8 +348,8 @@ def feet_distance(env: ManagerBasedRLEnv,
                   max_feet_distance: float = 1.0,)-> torch.Tensor:
     # Penalize base height away from target
     asset = env.scene[asset_cfg.name]
-    feet_links_idx = wp.to_torch(asset.find_bodies(feet_links_name)[0])
-    feet_pos = wp.to_torch(asset.data.body_link_pos_w)[:,feet_links_idx]
+    feet_links_idx = asset.find_bodies(feet_links_name)[0]
+    feet_pos = asset.data.body_link_pos_w[:,feet_links_idx]
     # feet distance on x-y plane
     feet_distance = torch.norm(feet_pos[:, 0, :2] - feet_pos[:, 1, :2], dim=-1)
     reward = torch.clip(min_feet_distance - feet_distance, 0, 1)
@@ -363,9 +363,9 @@ def feet_regulation(env: ManagerBasedRLEnv,
 ) -> torch.Tensor:
     asset = env.scene[asset_cfg.name]
     feet_height = torch.clip(
-        wp.to_torch(asset.data.body_pos_w)[:, asset_cfg.body_ids, 2] - foot_radius, 0, 1
+        asset.data.body_pos_w[:, asset_cfg.body_ids, 2] - foot_radius, 0, 1
     )  # TODO: change to the height relative to the vertical projection of the terrain
-    feet_vel_xy = wp.to_torch(asset.data.body_lin_vel_w)[:, asset_cfg.body_ids, :2]
+    feet_vel_xy = asset.data.body_lin_vel_w[:, asset_cfg.body_ids, :2]
 
     height_scale = torch.exp(-feet_height / base_height_target)
     reward = torch.sum(height_scale * torch.square(torch.norm(feet_vel_xy, dim=-1)), dim=1)
@@ -381,11 +381,11 @@ def foot_landing_vel(
     """Penalize high foot landing velocities"""
     asset = env.scene[asset_cfg.name]
     contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
-    z_vels = wp.to_torch(asset.data.body_lin_vel_w)[:, asset_cfg.body_ids, 2]
+    z_vels = asset.data.body_lin_vel_w[:, asset_cfg.body_ids, 2]
     contacts = contact_sensor.data.net_forces_w[:, sensor_cfg.body_ids, 2] > 0.1
 
     foot_heights = torch.clip(
-    wp.to_torch(asset.data.body_pos_w)[:, asset_cfg.body_ids, 2] - foot_radius, 0, 1
+    asset.data.body_pos_w[:, asset_cfg.body_ids, 2] - foot_radius, 0, 1
     )  # TODO: change to the height relative to the vertical projection of the terrain
 
     about_to_land = (foot_heights < about_landing_threshold) & (~contacts) & (z_vels < 0.0)
@@ -398,7 +398,7 @@ def joint_powers_l1(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEnt
 
     # extract the used quantities (to enable type-hinting)
     asset = env.scene[asset_cfg.name]
-    return torch.sum(torch.abs(torch.mul(wp.to_torch(asset.data.applied_torque), wp.to_torch(asset.data.joint_vel))), dim=1)
+    return torch.sum(torch.abs(torch.mul(asset.data.applied_torque, asset.data.joint_vel)), dim=1)
 
 def knee_joint_torques_standstill(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
     """Penalize joint powers on the articulation using L1-kernel"""
@@ -476,7 +476,7 @@ class GaitReward(ManagerTermBase):
         force_reward = self._compute_force_reward(foot_forces, desired_contact_states)
 
         # Velocity-based reward
-        foot_velocities = torch.norm(wp.to_torch(self.asset.data.body_lin_vel_w)[:, self.asset_cfg.body_ids], dim=-1)
+        foot_velocities = torch.norm(self.asset.data.body_lin_vel_w[:, self.asset_cfg.body_ids], dim=-1)
         velocity_reward = self._compute_velocity_reward(foot_velocities, desired_contact_states)
 
         # Combine rewards

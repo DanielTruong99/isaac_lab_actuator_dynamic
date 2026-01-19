@@ -15,6 +15,7 @@ gym.register(
     },
 )
 
+
 gym.register(
     id="Isaac-WalkingRobotRough-Newton-v9",
     entry_point="isaac_lab_actuator_dynamic.tasks.manager_based.sim2real_locomotion_flat.walking_robot:WalkingRobotEnv",

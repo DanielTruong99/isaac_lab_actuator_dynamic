@@ -195,9 +195,9 @@ LEGWALKING_HIGH_GAIN_AMARTURE_CFG = ArticulationCfg(
             enabled_self_collisions=True,
             fix_root_link=True,
         ),
-        collision_props=sim_utils.CollisionPropertiesCfg(
-            approximation="boundingCube",
-        ),
+        # collision_props=sim_utils.CollisionPropertiesCfg(
+        #     approximation="boundingCube",
+        # ),
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
             disable_gravity=False,
             retain_accelerations=False,
@@ -295,9 +295,9 @@ LEGWALKING_HIGH_GAIN_AMARTURE_2_CFG = ArticulationCfg(
             enabled_self_collisions=True,
             fix_root_link=True,
         ),
-        collision_props=sim_utils.CollisionPropertiesCfg(
-            approximation="boundingCube",
-        ),
+        # collision_props=sim_utils.CollisionPropertiesCfg(
+        #     approximation="boundingCube",
+        # ),
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
             disable_gravity=False,
             retain_accelerations=False,
@@ -414,9 +414,9 @@ LEGWALKING_HIGH_GAIN_AMARTURE_3_CFG = ArticulationCfg(
             enabled_self_collisions=True,
             fix_root_link=False,
         ),
-        collision_props=sim_utils.CollisionPropertiesCfg(
-            approximation="boundingCube",
-        ),
+        # collision_props=sim_utils.CollisionPropertiesCfg(
+        #     approximation="boundingCube",
+        # ),
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
             disable_gravity=False,
             retain_accelerations=False,
@@ -566,9 +566,9 @@ LEGWALKING_HIGH_GAIN_AMARTURE_9_CFG = ArticulationCfg(
             enabled_self_collisions=True,
             fix_root_link=False,
         ),
-        collision_props=sim_utils.CollisionPropertiesCfg(
-            approximation="boundingCube",
-        ),
+        # collision_props=sim_utils.CollisionPropertiesCfg(
+        #     approximation="boundingCube",
+        # ),
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
             disable_gravity=False,
             retain_accelerations=False,

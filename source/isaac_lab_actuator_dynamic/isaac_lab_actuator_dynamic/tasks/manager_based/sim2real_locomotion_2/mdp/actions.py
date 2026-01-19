@@ -37,30 +37,30 @@ class CustomJointPositionAction(JointPositionAction):
 
         #! Old estimated parameters from system identification
         # assume the joint ids are L -> R
-        # self.coulomb_friction = torch.tensor([
-        #     0.623915, 1.844928, 4.754382, 8.390081, 0.393410, # left hip, hip2, thigh, calf, toe
-        #     1.344627, 3.484132, 4.407304, 5.085046, 0.413043  # right hip, hip2, thigh, calf, toe
-        # ], device=self.device)
-        # self.coulomb_friction = self.coulomb_friction.repeat(self.num_envs, 1)
-
-        # self.viscous_friction = torch.tensor([
-        #     0.179873, 0.593230, 0.097767, 3.834728, 0.023536, # left hip, hip2, thigh, calf, toe
-        #     0.179873, 0.593230, 0.686212, 3.834728, 0.007213  # right hip, hip2, thigh, calf, toe
-        # ], device=self.device)
-        # self.viscous_friction = self.viscous_friction.repeat(self.num_envs, 1)
-
-        #! New estimated parameters from system identification
         self.coulomb_friction = torch.tensor([
-            0.623915, 1.844928, 0.534, 2.683429, 0.43967, # left hip, hip2, thigh, calf, toe
-            1.344627, 3.484132, 0.534, 2.683429, 0.413043  # right hip, hip2, thigh, calf, toe
+            0.623915, 1.844928, 4.754382, 8.390081, 0.393410, # left hip, hip2, thigh, calf, toe
+            1.344627, 3.484132, 4.407304, 5.085046, 0.413043  # right hip, hip2, thigh, calf, toe
         ], device=self.device)
         self.coulomb_friction = self.coulomb_friction.repeat(self.num_envs, 1)
 
         self.viscous_friction = torch.tensor([
-            0.158, 0.6522, 2.11, 0.64, 0.083082, # left hip, hip2, thigh, calf, toe
-            0.158, 0.6522, 2.11, 0.64, 0.083082  # right hip, hip2, thigh, calf, toe
+            0.179873, 0.593230, 0.097767, 3.834728, 0.023536, # left hip, hip2, thigh, calf, toe
+            0.179873, 0.593230, 0.686212, 3.834728, 0.007213  # right hip, hip2, thigh, calf, toe
         ], device=self.device)
         self.viscous_friction = self.viscous_friction.repeat(self.num_envs, 1)
+
+        # #! New estimated parameters from system identification
+        # self.coulomb_friction = torch.tensor([
+        #     0.623915, 1.844928, 0.534, 2.683429, 0.43967, # left hip, hip2, thigh, calf, toe
+        #     1.344627, 3.484132, 0.534, 2.683429, 0.413043  # right hip, hip2, thigh, calf, toe
+        # ], device=self.device)
+        # self.coulomb_friction = self.coulomb_friction.repeat(self.num_envs, 1)
+
+        # self.viscous_friction = torch.tensor([
+        #     0.158, 0.6522, 2.11, 0.64, 0.083082, # left hip, hip2, thigh, calf, toe
+        #     0.158, 0.6522, 2.11, 0.64, 0.083082  # right hip, hip2, thigh, calf, toe
+        # ], device=self.device)
+        # self.viscous_friction = self.viscous_friction.repeat(self.num_envs, 1)
 
         # # assume the joint ids are L -> R
         # self.coulomb_friction = torch.tensor([
@@ -110,7 +110,7 @@ class CustomJointPositionAction(JointPositionAction):
     #     # alpha = 0.65  # fc = 3.5 hz 
         self.prev_filtered_actions = self.filtered_actions.clone()
         if self.is_first:
-            self.filtered_actions = wp.to_torch(self._env.scene["robot"].data.joint_pos).clone()
+            self.filtered_actions = self._env.scene["robot"].data.joint_pos.clone()
             self.is_first = False
         self.filtered_actions = self.alpha * self.filtered_actions + (1 - self.alpha) * self.processed_actions
         
@@ -121,10 +121,10 @@ class CustomJointPositionAction(JointPositionAction):
         # self.filtered_actions[:, 0] = -self.filtered_actions[:, 0]
         # self.filtered_actions[:, 5] = -self.filtered_actions[:, 5]
         
-        self._asset.set_joint_position_target(self.processed_actions, joint_ids=self._joint_ids)
+        self._asset.set_joint_position_target(self.filtered_actions, joint_ids=self._joint_ids)
 
         # set friction torques
-        dof_vel = wp.to_torch(self._asset.data.joint_vel).clone()[:, self._joint_ids]
+        dof_vel = self._asset.data.joint_vel[:, self._joint_ids]
         friction_torques = -self.coulomb_friction * torch.tanh(dof_vel/0.05) - self.viscous_friction * dof_vel
         self._asset.set_joint_effort_target(friction_torques, joint_ids=self._joint_ids)
 

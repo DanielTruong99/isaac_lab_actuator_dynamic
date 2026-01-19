@@ -62,20 +62,20 @@ def reset_robot_states(
         asset: Articulation = env.scene[asset_cfg.name]
 
         # get default joint state are zeroed out
-        joint_pos = wp.to_torch(asset.data.default_joint_pos)[env_ids_zeros, asset_cfg.joint_ids].clone()
+        joint_pos = asset.data.default_joint_pos[env_ids_zeros, asset_cfg.joint_ids].clone()
         joint_pos = torch.zeros_like(joint_pos)
-        joint_vel = wp.to_torch(asset.data.default_joint_vel)[env_ids_zeros, asset_cfg.joint_ids].clone()
+        joint_vel = asset.data.default_joint_vel[env_ids_zeros, asset_cfg.joint_ids].clone()
 
         # bias these values randomly
         joint_pos += math_utils.sample_uniform(*position_range, joint_pos.shape, joint_pos.device)
         joint_vel += math_utils.sample_uniform(*velocity_range, joint_vel.shape, joint_vel.device)
 
         # clamp joint pos to limits
-        joint_pos_limits = wp.to_torch(asset.data.soft_joint_pos_limits)[env_ids_zeros, asset_cfg.joint_ids]
+        joint_pos_limits = asset.data.soft_joint_pos_limits[env_ids_zeros, asset_cfg.joint_ids]
         
         joint_pos = joint_pos.clamp_(joint_pos_limits[..., 0], joint_pos_limits[..., 1])
         # clamp joint vel to limits
-        joint_vel_limits = wp.to_torch(asset.data.soft_joint_vel_limits)[env_ids_zeros, asset_cfg.joint_ids]
+        joint_vel_limits = asset.data.soft_joint_vel_limits[env_ids_zeros, asset_cfg.joint_ids]
         joint_vel = joint_vel.clamp_(-joint_vel_limits, joint_vel_limits)
 
         # set into the physics simulation
@@ -88,7 +88,7 @@ def reset_robot_states(
 
         
         # get default root state
-        root_states = wp.to_torch(asset.data.default_root_state)[env_ids_zeros].clone()
+        root_states = asset.data.default_root_state[env_ids_zeros].clone()
         root_states[:, 2] = 0.65
 
         # poses
@@ -230,9 +230,9 @@ def apply_external_force_torque_stochastic(
     """
     # extract the used quantities (to enable type-hinting)
     asset = env.scene[asset_cfg.name]
-    # # clear the existing forces and torques
-    # asset._external_force_b *= 0
-    # asset._external_torque_b *= 0
+    # clear the existing forces and torques
+    asset._external_force_b *= 0
+    asset._external_torque_b *= 0
 
     # resolve environment ids
     if env_ids is None:
