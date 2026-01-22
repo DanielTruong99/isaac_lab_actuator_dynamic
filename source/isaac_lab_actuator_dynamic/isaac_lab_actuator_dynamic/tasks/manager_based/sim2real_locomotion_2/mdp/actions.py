@@ -121,7 +121,7 @@ class CustomJointPositionAction(JointPositionAction):
         # self.filtered_actions[:, 0] = -self.filtered_actions[:, 0]
         # self.filtered_actions[:, 5] = -self.filtered_actions[:, 5]
         
-        self._asset.set_joint_position_target(self.filtered_actions, joint_ids=self._joint_ids)
+        self._asset.set_joint_position_target(self.processed_actions, joint_ids=self._joint_ids)
 
         # set friction torques
         dof_vel = self._asset.data.joint_vel[:, self._joint_ids]

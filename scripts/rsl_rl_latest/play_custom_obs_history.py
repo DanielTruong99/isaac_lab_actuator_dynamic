@@ -238,15 +238,6 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
         if state == "STAND":
             if signal == "entry":
-                # stiffness = [50.0, 70.0, 700.0, 700.0, 50.0, 50.0, 70.0, 700.0, 700.0, 50.0]
-                # stiffness = torch.tensor(stiffness, device=env.unwrapped.device)
-                # stiffness.repeat(num_envs, 1)
-                # dampings = [ 3.0,  4.0,  4.0,  1.0, 1.0, 3.0,  4.0,  4.0,  1.0,  1.0]
-                # dampings = torch.tensor(dampings, device=env.unwrapped.device)
-                # dampings = dampings.repeat(num_envs, 1)
-                # asset.write_joint_stiffness_to_sim(stiffness)
-                # asset.write_joint_damping_to_sim(dampings)
-
                 # modify joint position action settings, the actions will directly set the joint positions
                 joint_pos_action._offset = torch.zeros((num_envs,asset.num_joints), device=env.unwrapped.device)
                 joint_pos_action._scale = 1.0
@@ -267,15 +258,6 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
                 
         if state == "WALK":
             if signal == "entry":
-                # stiffness = [45.0, 45.0, 45.0, 45.0, 45.0, 45.0, 45.0, 45.0, 45.0, 45.0]
-                # stiffness = torch.tensor(stiffness, device=env.unwrapped.device)
-                # stiffness.repeat(num_envs, 1)
-                # dampings = [ 1.5,  1.5,  1.5,  1.5, 0.8, 1.5,  1.5,  1.5,  1.5, 0.8]
-                # dampings = torch.tensor(dampings, device=env.unwrapped.device)
-                # dampings = dampings.repeat(num_envs, 1)
-                # asset.write_joint_stiffness_to_sim(stiffness)
-                # asset.write_joint_damping_to_sim(dampings)
-
                 # modify joint position action settings, for policy output scaling
                 #! joint order are different -> need to change the action scale accordingly, in deployment also
                 #! need change in the deployment joint order
@@ -288,9 +270,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
                 gait_cmds = torch.tensor([0.0, 0.0, 1.0, 0.0], device=env.unwrapped.device) # freq, offset, duration
                 gait_cmds = gait_cmds.repeat(num_envs, 1)
                 counter_5s = 5.0 / dt
-                counter_10s = 10.0 / dt
-                counter_15s = 15.0 / dt
-                counter_20s = 20.0 / dt
+
                 env.unwrapped.action_manager._terms["joint_pos"].alpha = 0.75  # fc = 3.5 hz
                 # counter = 0
                 policy_counter = 0
@@ -303,7 +283,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
                                      1.0 - 2.0 * (robot_orientation[:, 2]**2 + robot_orientation[:, 3]**2))
                     wz_cmd = -1.0 * yaw  # P controller to face forward
                     wz_cmd = torch.clamp(wz_cmd, min=-0.8, max=0.8)
-                    vel_cmds = torch.tensor([0.45, 0.0, wz_cmd], device=env.unwrapped.device)
+                    vel_cmds = torch.tensor([0.35, 0.0, wz_cmd], device=env.unwrapped.device)
                     alpha = 0.9
                     filtered_vel_cmds = alpha * filtered_vel_cmds + (1 - alpha) * vel_cmds
                     f = 1.5*vel_cmds[0]/0.7
@@ -313,86 +293,20 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
                     gait_cmds = gait_cmds.repeat(num_envs, 1)
                     vel_cmds = vel_cmds.repeat(num_envs, 1)
 
-                # if counter > counter_10s:
-                #     robot_orientation = asset.data.root_com_quat_w.clone()
-                #     yaw = torch.atan2(2.0 * (robot_orientation[:, 0] * robot_orientation[:, 3] + robot_orientation[:, 1] * robot_orientation[:, 2]),
-                #                      1.0 - 2.0 * (robot_orientation[:, 2]**2 + robot_orientation[:, 3]**2))
-                #     wz_cmd = -2.5 * yaw  # P controller to face forward
-                #     wz_cmd = torch.clamp(wz_cmd, min=-0.8, max=0.8)
-                #     vel_cmds = torch.tensor([0.35, 0.0, wz_cmd], device=env.unwrapped.device)
-                #     alpha = 0.9
-                #     filtered_vel_cmds = alpha * filtered_vel_cmds + (1 - alpha) * vel_cmds
-                #     f = 1.2*vel_cmds[0]/0.45
-                #     f = torch.clamp(f, min=0.8, max=1.6)
-                #     gait_cmds = torch.tensor([1.25, 0.5, 0.5, 0.1], device=env.unwrapped.device) # freq, offset, duration
-                #     env.unwrapped.action_manager._terms["joint_pos"].alpha = 0.45  # fc = 3.5 hz
-                #     gait_cmds = gait_cmds.repeat(num_envs, 1)
-                #     vel_cmds = vel_cmds.repeat(num_envs, 1)
-
-                # if counter > counter_15s:
-                #     robot_orientation = asset.data.root_com_quat_w.clone()
-                #     yaw = torch.atan2(2.0 * (robot_orientation[:, 0] * robot_orientation[:, 3] + robot_orientation[:, 1] * robot_orientation[:, 2]),
-                #                      1.0 - 2.0 * (robot_orientation[:, 2]**2 + robot_orientation[:, 3]**2))
-                #     wz_cmd = -2.5 * yaw  # P controller to face forward
-                #     wz_cmd = torch.clamp(wz_cmd, min=-0.8, max=0.8)
-                #     vel_cmds = torch.tensor([-0.3, 0.0, wz_cmd], device=env.unwrapped.device)
-                #     alpha = 0.9
-                #     filtered_vel_cmds = alpha * filtered_vel_cmds + (1 - alpha) * vel_cmds
-                #     f = 1.2*vel_cmds[0]/0.45
-                #     f = torch.clamp(f, min=0.8, max=1.6)
-                #     gait_cmds = torch.tensor([1.0, 0.5, 0.5, 0.1], device=env.unwrapped.device) # freq, offset, duration
-                #     env.unwrapped.action_manager._terms["joint_pos"].alpha = 0.45  # fc = 3.5 hz
-                #     gait_cmds = gait_cmds.repeat(num_envs, 1)
-                #     vel_cmds = vel_cmds.repeat(num_envs, 1)
-
-                # if counter > counter_20s:
-                #     robot_orientation = asset.data.root_com_quat_w.clone()
-                #     yaw = torch.atan2(2.0 * (robot_orientation[:, 0] * robot_orientation[:, 3] + robot_orientation[:, 1] * robot_orientation[:, 2]),
-                #                      1.0 - 2.0 * (robot_orientation[:, 2]**2 + robot_orientation[:, 3]**2))
-                #     wz_cmd = -2.5 * yaw  # P controller to face forward
-                #     wz_cmd = torch.clamp(wz_cmd, min=-0.8, max=0.8)
-                #     vel_cmds = torch.tensor([0.65, 0.0, wz_cmd], device=env.unwrapped.device)
-                #     alpha = 0.9
-                #     filtered_vel_cmds = alpha * filtered_vel_cmds + (1 - alpha) * vel_cmds
-                #     f = 1.2*vel_cmds[0]/0.45
-                #     f = torch.clamp(f, min=0.8, max=1.6)
-                #     gait_cmds = torch.tensor([0.8, 0.5, 0.5, 0.1], device=env.unwrapped.device) # freq, offset, duration
-                #     env.unwrapped.action_manager._terms["joint_pos"].alpha = 0.45  # fc = 3.5 hz
-                #     gait_cmds = gait_cmds.repeat(num_envs, 1)
-                #     vel_cmds = vel_cmds.repeat(num_envs, 1)
-
-
-
-
 
                 policy_counter += 1
 
-                # Calculate gait indices based on episode length
-                # gait_indices = torch.remainder(policy_counter * env.unwrapped.step_dt * gait_cmds[:, 0], 1.0)
-                # gait_indices = gait_indices.unsqueeze(-1)
-                # sin_phase = torch.sin(2 * torch.pi * gait_indices)
-                # cos_phase = torch.cos(2 * torch.pi * gait_indices)
-                # gait_phase = torch.cat([sin_phase, cos_phase], dim=-1)
-                    
-                
                 with torch.inference_mode():
                     if counter < max_num_steps - 1:
-                        # action = env.unwrapped.action_manager.action.clone()
-                        # prev_action = env.unwrapped.action_manager.prev_action.clone()
-                        # filter_actions = env.unwrapped.action_manager._terms["joint_pos"].filtered_actions.clone()
-                        # prev_filtered_actions = env.unwrapped.action_manager._terms["joint_pos"].prev_filtered_actions.clone()
-                        # joint_vels[counter] = (filter_actions - prev_filtered_actions)
-                        # base_lin_vel = asset.data.root_lin_vel_b.clone()
-                        # joint_pos = asset.data.joint_pos.clone()
-                        # joint_vel = asset.data.joint_vel.clone()
-                        applied_torque = asset.data.applied_torque.clone()
-                        joint_vels[counter] = applied_torque - prev_applied_torque
-                        # joint_poses[counter] = joint_pos
-                        # joint_torques[counter] = applied_torque
-                        # base_lin_vels[counter] = base_lin_vel
-                        prev_applied_torque = applied_torque
-                        # joint_pos = asset.data.joint_pos.clone()
-                        # joint_vels[counter] = joint_pos
+                        #! check torque rate
+                        # applied_torque = asset.data.applied_torque.clone()
+                        # joint_vels[counter] = applied_torque - prev_applied_torque
+                        # prev_applied_torque = applied_torque
+
+                        #! check base linear vel
+                        base_lin_vels = asset.data.root_lin_vel_w[:, :3].clone()
+                        joint_vels[counter] = torch.norm(base_lin_vels, dim=-1)
+  
                     else:
                         joint_vels = joint_vels.cpu().numpy()
                         fig, axes = plt.subplots(2, 5, figsize=(8, 16))
@@ -452,12 +366,8 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
         # run everything in inference mode
         with torch.inference_mode():
-            # agent stepping
-            # actions = policy(obs)
-            # env stepping
             obs, _, dones, _ = env.step(actions)
-            # reset recurrent states for episodes that have terminated
-            # policy_nn.reset(dones)
+
         if args_cli.video:
             timestep += 1
             # Exit the play loop after recording one video

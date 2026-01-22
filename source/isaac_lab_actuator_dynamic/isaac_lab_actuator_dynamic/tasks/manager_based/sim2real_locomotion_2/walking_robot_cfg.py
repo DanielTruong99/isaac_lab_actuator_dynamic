@@ -215,7 +215,17 @@ class EventCfg:
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names="Pelvis"),
-            "com_range": {"x": (-0.03, 0.03), "y": (-0.03, 0.03), "z": (-0.03, 0.03)},
+            "com_range": {"x": (-0.035, 0.02), "y": (-0.05, 0.05), "z": (-0.05, 0.05)},
+        },
+    )
+
+    add_joint_default_pos = EventTermCfg(
+        func=custom_mdp.randomize_joint_default_pos,
+        mode="startup",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", joint_names=[".*"]),
+            "pos_distribution_params": (-0.1, 0.1),
+            "operation": "add",
         },
     )
 
@@ -479,7 +489,7 @@ class WalkingRobotEnvCfg(ManagerBasedRLEnvCfg):
         self.scene.terrain.terrain_generator.curriculum = False #type: ignore
         self.curriculum.terrain_levels = None
         self.episode_length_s = 20.0
-        self.sim.dt = 0.002 # 200hz
+        self.sim.dt = 0.002 # 500hz
         self.decimation = 10 # 50hz
         self.sim.render_interval = self.decimation * 1
 
@@ -563,6 +573,7 @@ class WalkingRobotPlayEnvCfg(WalkingRobotEnvCfg):
         self.events.base_com = None
         self.events.add_link_mass = None
         self.events.robot_physics_material = None
+        self.events.add_joint_default_pos = None
     
 
 
