@@ -21,6 +21,9 @@ if TYPE_CHECKING:
 
 import warp as wp
 
+from .controllers import STAController
+from .controllers import STA_CONTROLLERS_CFG
+
 class CustomJointPositionAction(JointPositionAction):
     """Joint action term that applies the processed actions to the articulation's joints as position commands."""
 
@@ -51,14 +54,14 @@ class CustomJointPositionAction(JointPositionAction):
 
         # #! New estimated parameters from system identification
         # self.coulomb_friction = torch.tensor([
-        #     0.623915, 1.844928, 0.534, 2.683429, 0.43967, # left hip, hip2, thigh, calf, toe
-        #     1.344627, 3.484132, 0.534, 2.683429, 0.413043  # right hip, hip2, thigh, calf, toe
+        #     0.623915, 1.844928, 0.215606, 1.821444, 0.447999, # left hip, hip2, thigh, calf, toe
+        #     1.344627, 3.484132, 0.215606, 1.821444, 0.447999  # right hip, hip2, thigh, calf, toe
         # ], device=self.device)
         # self.coulomb_friction = self.coulomb_friction.repeat(self.num_envs, 1)
 
         # self.viscous_friction = torch.tensor([
-        #     0.158, 0.6522, 2.11, 0.64, 0.083082, # left hip, hip2, thigh, calf, toe
-        #     0.158, 0.6522, 2.11, 0.64, 0.083082  # right hip, hip2, thigh, calf, toe
+        #     0.158, 0.6522, 1.621029, 0.218711, 0.079036, # left hip, hip2, thigh, calf, toe
+        #     0.158, 0.6522, 1.621029, 0.218711, 0.079036  # right hip, hip2, thigh, calf, toe
         # ], device=self.device)
         # self.viscous_friction = self.viscous_friction.repeat(self.num_envs, 1)
 
@@ -127,6 +130,96 @@ class CustomJointPositionAction(JointPositionAction):
         dof_vel = self._asset.data.joint_vel[:, self._joint_ids]
         friction_torques = -self.coulomb_friction * torch.tanh(dof_vel/0.05) - self.viscous_friction * dof_vel
         self._asset.set_joint_effort_target(friction_torques, joint_ids=self._joint_ids)
+
+
+class CustomSTAJointPositionAction(JointPositionAction):
+    """Joint action term that applies the processed actions to the articulation's joints as position commands."""
+
+    cfg: CustomJointPositionActionCfg
+    """The configuration of the action term."""
+
+    def __init__(self, cfg: CustomJointPositionActionCfg, env: ManagerBasedEnv):
+        # initialize the action term
+        super().__init__(cfg, env)
+        #! Old estimated parameters from system identification
+        # assume the joint ids are L -> R
+        self.coulomb_friction = torch.tensor([
+            0.623915, 1.844928, 4.754382, 8.390081, 0.393410, # left hip, hip2, thigh, calf, toe
+            1.344627, 3.484132, 4.407304, 5.085046, 0.413043  # right hip, hip2, thigh, calf, toe
+        ], device=self.device)
+        self.coulomb_friction = self.coulomb_friction.repeat(self.num_envs, 1)
+
+        self.viscous_friction = torch.tensor([
+            0.179873, 0.593230, 0.097767, 3.834728, 0.023536, # left hip, hip2, thigh, calf, toe
+            0.179873, 0.593230, 0.686212, 3.834728, 0.007213  # right hip, hip2, thigh, calf, toe
+        ], device=self.device)
+        self.viscous_friction = self.viscous_friction.repeat(self.num_envs, 1)
+
+        # Initialize STA controllers for each joint
+        self.sta_controllers = STAController(STA_CONTROLLERS_CFG, dof=10, device=self.device).to(self.device)
+        self.sta_controllers = torch.compile(self.sta_controllers)
+        self.sta_controllers.reset(self.num_envs)
+        self.target_efforts = torch.zeros((self.num_envs, self._num_joints), device=self.device)
+
+  
+
+    def reset(self, env_ids: Sequence[int] | None = None) -> None:
+        self._raw_actions[env_ids] = 0.0
+        self.sta_controllers.reset(self.num_envs)
+        self.target_efforts[env_ids] = 0.0
+
+    def set_joint_frictions(self, coulomb: torch.Tensor, viscous: torch.Tensor):
+        """Set the joint friction coefficients.
+
+        Args:
+            coulomb (torch.Tensor): Coulomb friction coefficients of shape (num_envs, num_joints).
+            viscous (torch.Tensor): Viscous friction coefficients of shape (num_envs, num_joints).
+        """
+        self.coulomb_friction = coulomb.to(dtype=torch.float32)
+        self.viscous_friction = viscous.to(dtype=torch.float32)
+
+
+    def apply_actions(self):
+        # Noise injection to feedback states
+        noised_q = torch.randn_like(self._asset.data.joint_pos[:, self._joint_ids]) * 0.002
+        noised_qd = torch.randn_like(self._asset.data.joint_vel[:, self._joint_ids]) * 0.2  
+        noised_q += self._asset.data.joint_pos[:, self._joint_ids]
+        noised_qd += self._asset.data.joint_vel[:, self._joint_ids]
+
+        # test qref
+        # qref = torch.zeros_like(noised_q)
+
+        # set position targets using STA controller
+        self.target_efforts = self.sta_controllers(
+            q=noised_q,
+            qd=noised_qd,
+            q_ref=self.processed_actions,
+            # q_ref=qref,
+        )
+
+        # set friction torques (simulation model)
+        dof_vel = self._asset.data.joint_vel[:, self._joint_ids]
+        friction_torques = -self.coulomb_friction * torch.tanh(dof_vel/0.05) - self.viscous_friction * dof_vel
+
+        self._asset.set_joint_effort_target(self.target_efforts + friction_torques, joint_ids=self._joint_ids)
+
+
+@configclass
+class CustomSTAJointPositionActionCfg(JointActionCfg):
+    """Configuration for the joint position action term.
+
+    See :class:`JointPositionAction` for more details.
+    """
+
+    class_type: type[ActionTerm] = CustomSTAJointPositionAction
+
+    use_default_offset: bool = True
+    """Whether to use default joint positions configured in the articulation asset as offset.
+    Defaults to True.
+
+    If True, this flag results in overwriting the values of :attr:`offset` to the default joint positions
+    from the articulation asset.
+    """
 
 @configclass
 class CustomJointPositionActionCfg(JointActionCfg):

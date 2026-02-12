@@ -39,6 +39,7 @@ from isaaclab.managers import CurriculumTermCfg as CurrTerm
 # User defined configs
 ##
 from isaac_lab_actuator_dynamic.assets import LEG_CHANGED_IMU_HIGHGAIN_CFG, LEG_CHANGED_IMU_HIGHGAIN_ACTION_SCALE, LEG_CHANGED_IMU_LOWGAIN_CFG
+from isaac_lab_actuator_dynamic.assets import LEG_CHANGED_IMU_STA_CFG
 from . import mdp as custom_mdp
 from isaaclab.terrains.config.rough import ROUGH_TERRAINS_CFG  # isort: skip
 import torch
@@ -92,7 +93,7 @@ class SceneCfg(InteractiveSceneCfg):
 @configclass
 class ActionsCfg:
     """Action specifications for the MDP."""
-    joint_pos = custom_mdp.CustomJointPositionActionCfg(
+    joint_pos = custom_mdp.CustomSTAJointPositionActionCfg(
         asset_name="robot", 
         joint_names=[".*"], 
         use_default_offset=True,
@@ -103,7 +104,7 @@ class ActionsCfg:
         #     ".*_calf_joint": 0.8,
         #     ".*_toe_joint": 0.15,
         # }
-        scale=0.25,
+        scale=0.5,
     )
 
 @configclass
@@ -119,8 +120,8 @@ class ObservationsCfg:
         projected_gravity = ObservationTermCfg(func=mdp.projected_gravity, noise=AdditiveGaussianNoiseCfg(mean=0.0, std=0.025), clip=(-100.0, 100.0), scale=1.0)
         
         # joint state
-        joint_pos = ObservationTermCfg(func=mdp.joint_pos_rel, noise=AdditiveGaussianNoiseCfg(mean=0.0, std=0.01), clip=(-100.0, 100.0), scale=1.0)
-        joint_vel = ObservationTermCfg(func=mdp.joint_vel, noise=AdditiveGaussianNoiseCfg(mean=0.0, std=0.35), clip=(-100.0, 100.0), scale=0.05)
+        joint_pos = ObservationTermCfg(func=mdp.joint_pos_rel, noise=AdditiveGaussianNoiseCfg(mean=0.0, std=0.002), clip=(-100.0, 100.0), scale=1.0)
+        joint_vel = ObservationTermCfg(func=mdp.joint_vel, noise=AdditiveGaussianNoiseCfg(mean=0.0, std=0.2), clip=(-100.0, 100.0), scale=0.05)
         
         # last action
         last_action = ObservationTermCfg(func=mdp.last_action, noise=AdditiveGaussianNoiseCfg(mean=0.0, std=0.01), clip=(-100.0, 100.0), scale=1.0)
@@ -191,9 +192,23 @@ class ObservationsCfg:
             self.concatenate_terms = True
 
 
+    @configclass
+    class DebugCfg(ObservationGroupCfg):
+        """Observations for debug group."""
+        # base state
+        sta_joint_torque = ObservationTermCfg(
+            func=custom_mdp.joint_torque_sta,
+            params={"asset_cfg": SceneEntityCfg("robot", joint_names=["L_toe_joint"])}
+        )
+
+        def __post_init__(self):
+            self.enable_corruption = False
+            self.concatenate_terms = True
+
     # observation groups
     policy: PolicyCfg = PolicyCfg() 
     critic: CriticCfg = CriticCfg()
+    # debug: DebugCfg = DebugCfg()
     
 
 @configclass 
@@ -215,7 +230,7 @@ class EventCfg:
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names="Pelvis"),
-            "com_range": {"x": (-0.035, 0.02), "y": (-0.05, 0.05), "z": (-0.05, 0.05)},
+            "com_range": {"x": (-0.05, 0.03), "y": (-0.03, 0.03), "z": (-0.03, 0.03)},
         },
     )
 
@@ -251,34 +266,34 @@ class EventCfg:
         },
     )
 
-    robot_joint_stiffness_and_damping = EventTermCfg(
-        func=mdp.randomize_actuator_gains,
-        mode="startup",
-        params={
-            "asset_cfg": SceneEntityCfg("robot", joint_names=".*"),
-            "stiffness_distribution_params": (0.7, 1.1),
-            "damping_distribution_params": (1.0, 2.0),
-            "operation": "scale",
-            "distribution": "uniform",
-        },
-    )
+    # robot_joint_stiffness_and_damping = EventTermCfg(
+    #     func=mdp.randomize_actuator_gains,
+    #     mode="startup",
+    #     params={
+    #         "asset_cfg": SceneEntityCfg("robot", joint_names=".*"),
+    #         "stiffness_distribution_params": (0.65, 1.1),
+    #         "damping_distribution_params": (1.0, 2.0),
+    #         "operation": "scale",
+    #         "distribution": "uniform",
+    #     },
+    # )
 
     # reset
-    reset_robot_base = EventTermCfg(
-        func=mdp.reset_root_state_uniform,
-        mode="reset",
-        params={
-            "pose_range": {"x": (-0.5, 0.5), "y": (-0.5, 0.5), "yaw": (-3.14, 3.14)},
-            "velocity_range": {
-                "x": (-0.5, 0.5),
-                "y": (-0.5, 0.5),
-                "z": (-0.5, 0.5),
-                "roll": (-0.5, 0.5),
-                "pitch": (-0.5, 0.5),
-                "yaw": (-0.5, 0.5),
-            },
-        },
-    )
+    # reset_robot_base = EventTermCfg(
+    #     func=mdp.reset_root_state_uniform,
+    #     mode="reset",
+    #     params={
+    #         "pose_range": {"x": (-0.5, 0.5), "y": (-0.5, 0.5), "yaw": (-3.14, 3.14)},
+    #         "velocity_range": {
+    #             "x": (-0.5, 0.5),
+    #             "y": (-0.5, 0.5),
+    #             "z": (-0.5, 0.5),
+    #             "roll": (-0.5, 0.5),
+    #             "pitch": (-0.5, 0.5),
+    #             "yaw": (-0.5, 0.5),
+    #         },
+    #     },
+    # )
 
     reset_robot_joints = EventTermCfg(
         func=mdp.reset_joints_by_offset,
@@ -289,23 +304,23 @@ class EventCfg:
         },
     )
 
-    # reset_robot_states = EventTermCfg(
-    #     func=custom_mdp.reset_robot_states,
-    #     mode="reset",
-    #     params={
-    #         "position_range": (-0.2, 0.2),
-    #         "velocity_range": (-0.5, 0.5),
-    #         "root_pose_range": {"x": (-0.5, 0.5), "y": (-0.5, 0.5), "yaw": (-3.14, 3.14)},
-    #         "root_velocity_range": {
-    #             "x": (-0.5, 0.5),
-    #             "y": (-0.5, 0.5),
-    #             "z": (-0.5, 0.5),
-    #             "roll": (-0.5, 0.5),
-    #             "pitch": (-0.5, 0.5),
-    #             "yaw": (-0.5, 0.5),
-    #         },
-    #     },
-    # )
+    reset_robot_states = EventTermCfg(
+        func=custom_mdp.reset_robot_states,
+        mode="reset",
+        params={
+            "position_range": (-0.2, 0.2),
+            "velocity_range": (-0.5, 0.5),
+            "root_pose_range": {"x": (-0.5, 0.5), "y": (-0.5, 0.5), "yaw": (-3.14, 3.14)},
+            "root_velocity_range": {
+                "x": (-0.5, 0.5),
+                "y": (-0.5, 0.5),
+                "z": (-0.5, 0.5),
+                "roll": (-0.5, 0.5),
+                "pitch": (-0.5, 0.5),
+                "yaw": (-0.5, 0.5),
+            },
+        },
+    )
 
     push_robot = EventTermCfg(
         func=custom_mdp.apply_external_force_torque_stochastic,
@@ -497,9 +512,9 @@ class WalkingRobotEnvCfg(ManagerBasedRLEnvCfg):
             self.scene.contact_forces.update_period = self.sim.dt
 
         # setting robot asset
-        self.scene.robot = LEG_CHANGED_IMU_HIGHGAIN_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot") #type: ignore
+        self.scene.robot = LEG_CHANGED_IMU_STA_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot") #type: ignore
 
-        self.actions.joint_pos.scale = LEG_CHANGED_IMU_HIGHGAIN_ACTION_SCALE
+        # self.actions.joint_pos.scale = LEG_CHANGED_IMU_HIGHGAIN_ACTION_SCALE
 
 
 @configclass
@@ -513,7 +528,7 @@ class PlayObsCfg(ObservationGroupCfg):
     
     # joint state
     joint_pos = ObservationTermCfg(func=mdp.joint_pos_rel, noise=AdditiveGaussianNoiseCfg(mean=0.0, std=0.01), clip=(-100.0, 100.0), scale=1.0)
-    joint_vel = ObservationTermCfg(func=mdp.joint_vel, noise=AdditiveGaussianNoiseCfg(mean=0.0, std=0.35), clip=(-100.0, 100.0), scale=0.05)
+    joint_vel = ObservationTermCfg(func=mdp.joint_vel, noise=AdditiveGaussianNoiseCfg(mean=0.0, std=0.2), clip=(-100.0, 100.0), scale=0.05)
     
     # last action
     last_action = ObservationTermCfg(func=mdp.last_action, noise=AdditiveGaussianNoiseCfg(mean=0.0, std=0.01), clip=(-100.0, 100.0), scale=1.0)
@@ -548,11 +563,11 @@ class ObservationsPlayCfg(ObservationsCfg):
         joint_action_L_hip2 = ObservationTermCfg(func=custom_mdp.joint_actions, params={"asset_cfg": SceneEntityCfg("robot", joint_names="L_hip2_joint")})
         joint_action_R_hip2 = ObservationTermCfg(func=custom_mdp.joint_actions, params={"asset_cfg": SceneEntityCfg("robot", joint_names="R_hip2_joint")})
 
-        desired_contact_states = ObservationTermCfg(func=custom_mdp.desired_contact_states, params={"command_name": "gait_command"})
+        # desired_contact_states = ObservationTermCfg(func=custom_mdp.desired_contact_states, params={"command_name": "gait_command"})
 
     
 
-    # debug: DebugCfg = DebugCfg()
+    debug: DebugCfg = DebugCfg()
     play_obs: PlayObsCfg = PlayObsCfg()
     
 
@@ -574,7 +589,9 @@ class WalkingRobotPlayEnvCfg(WalkingRobotEnvCfg):
         self.events.add_link_mass = None
         self.events.robot_physics_material = None
         self.events.add_joint_default_pos = None
-    
+        self.events.robot_joint_direct_stiffness_and_damping = None
+        self.events.robot_joint_indirect_stiffness_and_damping = None
+        self.events.robot_joint_toe_stiffness_and_damping = None
 
 
         # self.sim.dt = 0.002 # 1000hz

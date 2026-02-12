@@ -1,6 +1,6 @@
 import os
 import isaaclab.sim as sim_utils
-from isaaclab.actuators import ActuatorNetMLPCfg, DCMotorCfg, ImplicitActuatorCfg, IdealPDActuatorCfg, DelayedPDActuatorCfg
+from isaaclab.actuators import ActuatorNetMLPCfg, DCMotorCfg, ImplicitActuatorCfg, IdealPDActuatorCfg, ImplicitActuatorCfg
 from isaaclab.assets.articulation import ArticulationCfg
 from isaac_lab_actuator_dynamic.assets import LOCAL_ASSETS_DATA_DIR
 import math
@@ -8,42 +8,53 @@ import math
 LEG_CHANGED_IMU_USD_PATH = f"/home/humanoid2/DanielTruong/isaac_lab_actuator_dynamic/source/isaac_lab_actuator_dynamic/isaac_lab_actuator_dynamic/assets/usd/Leg_Changed_IMU/leg_changed_imu.usd"
 LEG_CHANGED_IMU_URDF_PATH = f"/home/humanoid2/DanielTruong/isaac_lab_actuator_dynamic/source/isaac_lab_actuator_dynamic/isaac_lab_actuator_dynamic/assets/urdf/Leg_Changed_IMU/Wholebody_URDF_IMU_Changed.urdf"
 
-EFFECTIVE_HIP_ARMATURE = 0.092030
-EFFECTIVE_HIP2_ARMATURE = 0.1020675
-EFFECTIVE_THIGH_ARMATURE = 0.16071
-EFFECTIVE_CALF_ARMATURE = 0.14273
-EFFECTIVE_TOE_ARMATURE = 0.037552
+# EFFECTIVE_HIP_ARMATURE = 0.092030
+# EFFECTIVE_HIP2_ARMATURE = 0.1020675
 
-EFFECTIVE_VISCOUSE_FRICTION_LHIP = 0.158
-EFFECTIVE_VISCOUSE_FRICTION_LHIP2 = 0.6522
-EFFECTIVE_VISCOUSE_FRICTION_LTHIGH = 0.686212
-EFFECTIVE_VISCOUSE_FRICTION_LCALF = 3.834728
-EFFECTIVE_VISCOUSE_FRICTION_LTOE = 0.083082
-EFFECTIVE_VISCOUSE_FRICTION_RHIP = 0.158
-EFFECTIVE_VISCOUSE_FRICTION_RHIP2 = 0.6522
-EFFECTIVE_VISCOUSE_FRICTION_RTHIGH = 0.686212
-EFFECTIVE_VISCOUSE_FRICTION_RCALF = 3.834728
-EFFECTIVE_VISCOUSE_FRICTION_RTOE = 0.083082
+# # EFFECTIVE_THIGH_ARMATURE = 0.16071
+# EFFECTIVE_THIGH_ARMATURE = 0.061379 #! Torque Scale 0.751666
 
-EFFECTIVE_DYNAMIC_FRICTION_LHIP = 0.623915
-EFFECTIVE_DYNAMIC_FRICTION_LHIP2 = 1.844928
-EFFECTIVE_DYNAMIC_FRICTION_LTHIGH = 4.754382
-EFFECTIVE_DYNAMIC_FRICTION_LCALF = 8.390081
-EFFECTIVE_DYNAMIC_FRICTION_LTOE = 0.43967
-EFFECTIVE_DYNAMIC_FRICTION_RHIP = 1.344627
-EFFECTIVE_DYNAMIC_FRICTION_RHIP2 = 3.484132
-EFFECTIVE_DYNAMIC_FRICTION_RTHIGH = 4.407304
-EFFECTIVE_DYNAMIC_FRICTION_RCALF = 5.085046
-EFFECTIVE_DYNAMIC_FRICTION_RTOE = 0.43967
+# # EFFECTIVE_CALF_ARMATURE = 0.14273
+# EFFECTIVE_CALF_ARMATURE = 0.061914 #! Torque Scale 0.573606
+ 
+# EFFECTIVE_TOE_ARMATURE = 0.037790 #! Torque Scale 1.0
 
-HIP_ARMATURE = 0.07
-HIP2_ARMATURE = 0.075
-THIGH_ARMATURE = 0.08
-CALF_ARMATURE = 0.077
-TOE_ARMATURE = 0.0375
+EFFECTIVE_HIP_ARMATURE = 0.102588
+EFFECTIVE_HIP2_ARMATURE = 0.457870
+EFFECTIVE_THIGH_ARMATURE = 0.596446 
+EFFECTIVE_CALF_ARMATURE = 0.14273 
+EFFECTIVE_TOE_ARMATURE = 0.037790 
 
-ETA = 1.25
-NATURAL_FREQUENCY = 2.0 * math.pi * 6.65 # 6.65 Hz
+# EFFECTIVE_VISCOUSE_FRICTION_LHIP = 0.158
+# EFFECTIVE_VISCOUSE_FRICTION_LHIP2 = 0.6522
+# EFFECTIVE_VISCOUSE_FRICTION_LTHIGH = 0.686212
+# EFFECTIVE_VISCOUSE_FRICTION_LCALF = 3.834728
+# EFFECTIVE_VISCOUSE_FRICTION_LTOE = 0.083082
+# EFFECTIVE_VISCOUSE_FRICTION_RHIP = 0.158
+# EFFECTIVE_VISCOUSE_FRICTION_RHIP2 = 0.6522
+# EFFECTIVE_VISCOUSE_FRICTION_RTHIGH = 0.686212
+# EFFECTIVE_VISCOUSE_FRICTION_RCALF = 3.834728
+# EFFECTIVE_VISCOUSE_FRICTION_RTOE = 0.083082
+
+# EFFECTIVE_DYNAMIC_FRICTION_LHIP = 0.623915
+# EFFECTIVE_DYNAMIC_FRICTION_LHIP2 = 1.844928
+# EFFECTIVE_DYNAMIC_FRICTION_LTHIGH = 4.754382
+# EFFECTIVE_DYNAMIC_FRICTION_LCALF = 8.390081
+# EFFECTIVE_DYNAMIC_FRICTION_LTOE = 0.43967
+# EFFECTIVE_DYNAMIC_FRICTION_RHIP = 1.344627
+# EFFECTIVE_DYNAMIC_FRICTION_RHIP2 = 3.484132
+# EFFECTIVE_DYNAMIC_FRICTION_RTHIGH = 4.407304
+# EFFECTIVE_DYNAMIC_FRICTION_RCALF = 5.085046
+# EFFECTIVE_DYNAMIC_FRICTION_RTOE = 0.43967
+
+HIP_ARMATURE = 0.102588
+HIP2_ARMATURE = 0.15
+THIGH_ARMATURE = 0.16
+CALF_ARMATURE = 0.16
+TOE_ARMATURE = 0.040897
+
+ETA = 1.1
+NATURAL_FREQUENCY = 2.0 * math.pi * 5.45 # 6.65 Hz
 STIFFNESS = NATURAL_FREQUENCY * NATURAL_FREQUENCY
 DAMPING = 2.0 * ETA * NATURAL_FREQUENCY
 HIP_STIFFNESS = STIFFNESS * HIP_ARMATURE
@@ -82,18 +93,18 @@ LEG_CHANGED_IMU_HIGHGAIN_CFG = ArticulationCfg(
         ),
     ),
     init_state=ArticulationCfg.InitialStateCfg(
-        pos=(0.0, 0.0, 0.8305),
+        pos=(0.0, 0.0, 0.73),
         joint_pos={
             'L_hip_joint': 0.0, # limit -35, 35 (degrees)
             'L_hip2_joint': 0.0, # limit -35, 35 (degrees)
-            'L_thigh_joint': 0.65, # limit -70, 70 (degrees)
-            'L_calf_joint': -1.05, # limit -110, 0 (degrees)
-            'L_toe_joint': 0.4, # limit -45, 45 (degrees)
+            'L_thigh_joint': 0.18185188, # limit -70, 70 (degrees)
+            'L_calf_joint': -0.3369326, # limit -110, 0 (degrees)
+            'L_toe_joint': 0.1548768, # limit -45, 45 (degrees)
             'R_hip_joint': 0.0, # limit -35, 35 (degrees)
             'R_hip2_joint': 0.0, # limit -35, 35 (degrees)
-            'R_thigh_joint': 0.65, # limit -70, 70 (degrees)
-            'R_calf_joint': -1.05, # limit -110, 0 (degrees)
-            'R_toe_joint': 0.4, # limit -45, 45 (degrees)
+            'R_thigh_joint': 0.18185188, # limit -70, 70 (degrees)
+            'R_calf_joint': -0.3369326, # limit -110, 0 (degrees)
+            'R_toe_joint': 0.1548768, # limit -45, 45 (degrees)
         },
         joint_vel={".*": 0.0},
     ),
@@ -267,7 +278,7 @@ for a in LEG_CHANGED_IMU_HIGHGAIN_CFG.actuators.values():
         s = {n: s for n in names}
     for n in names:
         if n in e and n in s and s[n]:
-            LEG_CHANGED_IMU_HIGHGAIN_ACTION_SCALE[n] = 0.3 * e[n] / s[n]
+            LEG_CHANGED_IMU_HIGHGAIN_ACTION_SCALE[n] = 0.25 * e[n] / s[n]
 
 
 

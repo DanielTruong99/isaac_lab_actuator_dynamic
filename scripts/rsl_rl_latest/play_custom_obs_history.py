@@ -205,7 +205,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     asset.write_root_pose_to_sim(torch.cat([positions, orientations], dim=-1))
 
     # TODO data collection setup
-    collect_time = 25.0  # seconds
+    collect_time = 20.0  # seconds
     max_num_steps = int(collect_time / dt)
     joint_vels = torch.zeros((max_num_steps, num_envs, asset.num_joints), device=env.unwrapped.device)
     joint_poses = torch.zeros((max_num_steps, num_envs, asset.num_joints), device=env.unwrapped.device)
@@ -261,8 +261,9 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
                 # modify joint position action settings, for policy output scaling
                 #! joint order are different -> need to change the action scale accordingly, in deployment also
                 #! need change in the deployment joint order
-                action_scales = [0.2406, 0.2406, 0.2245, 0.2245, 0.2105, 0.2105, 0.3347, 0.3347, 0.1283, 0.1283]
-                joint_pos_action._offset = torch.tensor([0.0, 0.0, 0.0, 0.0, 0.65, 0.65, -1.05, -1.05, 0.4, 0.4], device=env.unwrapped.device)
+                # action_scales = [0.2406, 0.2406, 0.2245, 0.2245, 0.2105, 0.2105, 0.3347, 0.3347, 0.1283, 0.1283]
+                action_scales = [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]
+                joint_pos_action._offset = torch.tensor([0.0, 0.0, 0.0, 0.0, 0.18185188, 0.18185188, -0.3369326, -0.3369326, 0.1548768, 0.1548768], device=env.unwrapped.device)
                 joint_pos_action._scale = torch.tensor(action_scales, device=env.unwrapped.device)
 
                 # standing command
@@ -271,7 +272,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
                 gait_cmds = gait_cmds.repeat(num_envs, 1)
                 counter_5s = 5.0 / dt
 
-                env.unwrapped.action_manager._terms["joint_pos"].alpha = 0.75  # fc = 3.5 hz
+                env.unwrapped.action_manager._terms["joint_pos"].alpha = 0.6  # fc = 3.5 hz
                 # counter = 0
                 policy_counter = 0
                 filtered_vel_cmds = torch.zeros((num_envs, 3), device=env.unwrapped.device)
@@ -283,7 +284,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
                                      1.0 - 2.0 * (robot_orientation[:, 2]**2 + robot_orientation[:, 3]**2))
                     wz_cmd = -1.0 * yaw  # P controller to face forward
                     wz_cmd = torch.clamp(wz_cmd, min=-0.8, max=0.8)
-                    vel_cmds = torch.tensor([0.35, 0.0, wz_cmd], device=env.unwrapped.device)
+                    vel_cmds = torch.tensor([0.3, 0.0, wz_cmd], device=env.unwrapped.device)
                     alpha = 0.9
                     filtered_vel_cmds = alpha * filtered_vel_cmds + (1 - alpha) * vel_cmds
                     f = 1.5*vel_cmds[0]/0.7
@@ -304,7 +305,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
                         # prev_applied_torque = applied_torque
 
                         #! check base linear vel
-                        base_lin_vels = asset.data.root_lin_vel_w[:, :3].clone()
+                        base_lin_vels = asset.data.root_lin_vel_w[:, 2:3].clone()
                         joint_vels[counter] = torch.norm(base_lin_vels, dim=-1)
   
                     else:

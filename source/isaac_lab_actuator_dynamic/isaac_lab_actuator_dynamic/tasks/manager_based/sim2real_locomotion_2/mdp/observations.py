@@ -62,8 +62,9 @@ def joint_actions(env: WalkingRobotEnv, asset_cfg: SceneEntityCfg = SceneEntityC
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
     raw_actions = env.action_manager._terms["joint_pos"].processed_actions[:, asset_cfg.joint_ids]
-    filtered_actions = env.action_manager._terms["joint_pos"].filtered_actions[:, asset_cfg.joint_ids]
-    return torch.cat([raw_actions.to(device), filtered_actions.to(device)], dim=-1)
+    # filtered_actions = env.action_manager._terms["joint_pos"].filtered_actions[:, asset_cfg.joint_ids]
+    joint_pos = asset.data.joint_pos[:, asset_cfg.joint_ids]
+    return torch.cat([raw_actions.to(device), joint_pos.to(device)], dim=-1)
 
 
 def robot_joint_stiffness(env: WalkingRobotEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
@@ -176,6 +177,11 @@ def contact_state(env: WalkingRobotEnv, sensor_cfg: SceneEntityCfg, asset_cfg: S
 def joint_torque(env: WalkingRobotEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
     asset: Articulation = env.scene[asset_cfg.name]
     return asset.data.applied_torque[:, asset_cfg.joint_ids]
+
+def joint_torque_sta(env: WalkingRobotEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
+    # asset: Articulation = env.scene[asset_cfg.name]
+    # env.action_manager._terms["joint_pos"].target_efforts
+    return env.action_manager._terms["joint_pos"].target_efforts[:, asset_cfg.joint_ids]
 
 def joint_acc(env: WalkingRobotEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
     asset: Articulation = env.scene[asset_cfg.name]
